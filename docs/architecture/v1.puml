@@ -1,0 +1,68 @@
+@startuml
+!include C4_Container.puml
+
+title Trading Journal – C4 Diagram (Correct Module Separation)
+
+Person(trader, "Trader", "Explores markets and journals trades")
+
+' =========================
+' Trading Journal System
+' =========================
+System_Boundary(tj, "Trading Journal Web App") {
+
+  Container(ui, "Web UI",    "Web App",    "Trade entry, analytics, calendar, AI reports, market context")
+
+  Container(api, "Trade & Analytics API",    "Backend Service",    "Trade ingestion, CSV import, P/L calculation, analytics")
+
+  Container(manual, "Manual Trade Entry Service",    "Backend Module",    "Handles manually entered trades")
+
+  Container(csv, "CSV Import Service",    "Backend Module",    "Validates and imports broker CSV files")
+
+  Container(screenshot, "Screenshot Upload Service",    "Backend Module",    "Associates screenshots with trades")
+
+  Container(ai, "AI Analysis Module",    "AI Service",    "Generates trade charts and analysis")
+
+  ContainerDb(db, "Trading Database",    "PostgreSQL",    "Trades, accounts, performance metrics")
+}
+
+' =========================
+' Independent Market News System
+' =========================
+System_Boundary(newsSystem, "Market News & Economic Calendar") {
+
+  Container(newsUi, "Economic Calendar UI",    "Web Module",    "Displays economic events and filters")
+
+  Container(newsService, "Economic Calendar Service",    "Service",    "Fetches and normalizes economic events")
+}
+
+System_Ext(ea, "MT4 / MT5 EA",  "Streams live trade data")
+
+System_Ext(newsApi, "Economic News API",  "Provides economic calendar data")
+
+System_Ext(aiProvider, "AI Model Provider",  "LLM / Chart analysis")
+
+' =========================
+' Relationships
+' =========================
+Rel(trader, ui, "Uses (after login)")
+Rel(trader, newsUi, "Uses (no login required)")
+
+Rel(ui, manual, "Submits manual trades")
+Rel(ui, csv, "Uploads CSV")
+Rel(ui, screenshot, "Uploads screenshots")
+
+Rel(manual, api, "Sends validated trades")
+Rel(csv, api, "Sends parsed trades")
+Rel(screenshot, api, "Links media")
+
+Rel(ea, api, "Pushes trade data")
+
+Rel(api, db, "Reads/Writes")
+
+Rel(api, ai, "Requests trade analysis")
+Rel(ai, aiProvider, "Uses")
+
+Rel(newsUi, newsService, "Requests events")
+Rel(newsService, newsApi, "Fetches events")
+
+@enduml

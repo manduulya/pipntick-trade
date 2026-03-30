@@ -1,0 +1,37 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Trading Journal – Container Diagram (C4 Level 2)
+
+Person(trader, "Trader")
+
+System_Boundary(tradingJournal, "Trading Journal Web App") {
+
+  Container(webApp, "Web UI", "React / Flutter Web / Next.js", "User interface for trade entry, calendar, analytics, and news")
+
+  Container(api, "Backend API", "Spring Boot / Node.js", "Handles business logic, validation, and orchestration")
+
+  ContainerDb(database, "Trading Database", "PostgreSQL", "Stores trades, accounts, P/L, analytics")
+
+  Container(aiModule, "AI Analysis Module", "Internal or External", "Generates trade insights and charts")
+
+  Container(newsModule, "Economic Calendar Module", "Backend Service", "Fetches and normalizes economic events")
+}
+
+System_Ext(brokerEA, "MT4 / MT5 EA")
+System_Ext(economicApi, "Economic News API")
+System_Ext(aiService, "AI Model Provider")
+
+Rel(trader, webApp, "Uses")
+Rel(webApp, api, "HTTPS / REST")
+Rel(api, database, "Reads/Writes")
+
+Rel(api, aiModule, "Requests analysis")
+Rel(aiModule, aiService, "Uses")
+
+Rel(api, newsModule, "Requests events")
+Rel(newsModule, economicApi, "Fetches calendar data")
+
+Rel(brokerEA, api, "Pushes trades")
+
+@enduml

@@ -1,0 +1,4 @@
+<!-- Dark logo: dark text/mark, use on light backgrounds -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60">
+  <text x="0" y="48" font-family="sans-serif" font-size="48" font-weight="bold" fill="#000000">pipntick</text>
+</svg>

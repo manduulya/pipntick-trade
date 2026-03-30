@@ -1,0 +1,22 @@
+@startuml
+!include C4_Context.puml
+
+
+title Trading Journal – System Context Diagram (C4 Level 1)
+
+Person(trader, "Trader", "Retail or professional trader")
+
+System(tradingJournal, "Trading Journal Web App", "Logs trades, analyzes performance, visualizes results, and provides market context")
+
+System_Ext(brokerEA, "MT4 / MT5 Expert Advisor", "Streams live trade data")
+
+System_Ext(economicApi, "Economic News API", "Provides economic calendar and high-impact events")
+
+System_Ext(aiService, "AI Analysis Service", "Analyzes trades and generates insights")
+
+Rel(trader, tradingJournal, "Uses")
+Rel(brokerEA, tradingJournal, "Syncs trades")
+Rel(tradingJournal, economicApi, "Fetches economic events")
+Rel(tradingJournal, aiService, "Requests trade analysis")
+
+@enduml

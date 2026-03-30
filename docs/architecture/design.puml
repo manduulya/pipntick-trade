@@ -1,0 +1,51 @@
+@startuml
+title Trading Journal – User Journey (Phase 1)
+
+actor Trader as User
+
+rectangle "Trading Journal Web App" {
+
+  User -> (Login / Register)
+
+  (Login / Register) --> (Select Trading Account)
+
+  (Select / Create Trading Account) --> (Add Trade)
+
+  (Add Trade) --> (Manual Trade Entry)
+  (Add Trade) --> (Upload Screenshot)
+  (Add Trade) --> (MT4 / MT5 EA Live Sync)
+
+  (Manual Trade Entry) --> (Store Trade Data)
+  (Upload Screenshot) --> (Store Trade Data)
+  (MT4 / MT5 EA Live Sync) --> (Store Trade Data)
+
+  (Store Trade Data) --> (Calculate P/L)
+  (Calculate P/L) --> (Update Calendar View)
+
+  (Update Calendar View) --> (View Calendar)
+  note right of (View Calendar)
+    Green = Profitable Day
+    Red = Losing Day
+  end note
+
+  (View Calendar) --> (View Performance Analytics)
+
+  (View Performance Analytics) --> (Select Time Range)
+  (Select Time Range) --> (Weekly View)
+  (Select Time Range) --> (Monthly View)
+  (Select Time Range) --> (Yearly View)
+
+  (View Performance Analytics) --> (Select Trade for Analysis)
+
+  (Select Trade for Analysis) --> (Request AI Analysis)
+
+  (Request AI Analysis) --> (Generate Trade Chart)
+  (Generate Trade Chart) --> (Render Entry/Exit on Chart)
+  (Render Entry/Exit on Chart) --> (Save Chart Image)
+
+  (Save Chart Image) --> (AI Analyzes Trade)
+  (AI Analyzes Trade) --> (Display AI Report + Chart)
+
+}
+
+@enduml
