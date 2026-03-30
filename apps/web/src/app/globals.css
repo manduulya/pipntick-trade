@@ -1,1 +1,105 @@
 @import "tailwindcss";
+@source "../**/*.{ts,tsx}";
+
+@theme {
+  --color-green-primary: #7bc13b;
+  --color-green-secondary: #80c342;
+  --color-green-neon: #a3e05a;
+
+  --color-bg-base: #05090f;
+  --color-bg-surface: #0b1220;
+  --color-bg-card: #0f1a2e;
+  --color-bg-card-hover: #142138;
+
+  --color-border: #1a2d4a;
+  --color-border-subtle: #111e33;
+
+  --color-text-primary: #f0f0f0;
+  --color-text-secondary: #8899aa;
+  --color-text-muted: #4a5d70;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: #05090f;
+  color: #f0f0f0;
+  scroll-behavior: smooth;
+}
+
+/* Neon glow utilities */
+.neon-text {
+  color: #7bc13b;
+  text-shadow:
+    0 0 8px rgba(123, 193, 59, 0.6),
+    0 0 24px rgba(123, 193, 59, 0.3);
+}
+
+.neon-border {
+  border-color: #7bc13b;
+  box-shadow:
+    0 0 8px rgba(123, 193, 59, 0.3),
+    inset 0 0 8px rgba(123, 193, 59, 0.05);
+}
+
+.neon-btn {
+  background-color: #7bc13b;
+  color: #05090f;
+  box-shadow:
+    0 0 16px rgba(123, 193, 59, 0.4),
+    0 0 40px rgba(123, 193, 59, 0.15);
+  transition: box-shadow 0.2s ease, transform 0.1s ease;
+}
+
+.neon-btn:hover {
+  box-shadow:
+    0 0 24px rgba(123, 193, 59, 0.6),
+    0 0 60px rgba(123, 193, 59, 0.25);
+  transform: translateY(-1px);
+}
+
+.nav-link {
+  color: #8899aa;
+  transition: color 0.15s ease;
+}
+
+.nav-link:hover {
+  color: #f0f0f0;
+}
+
+.ghost-btn {
+  border: 1px solid #1a2d4a;
+  color: #8899aa;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.ghost-btn:hover {
+  border-color: #2a3d5a;
+  color: #f0f0f0;
+}
+
+.feature-card {
+  background-color: #05090f;
+  transition: background-color 0.15s ease;
+}
+
+.feature-card:hover {
+  background-color: #0b1220;
+}
+
+.gradient-radial-green {
+  background: radial-gradient(ellipse 80% 40% at 50% 0%, rgba(123, 193, 59, 0.08) 0%, transparent 70%);
+}
+
+.footer-link {
+  color: #4a5d70;
+  transition: color 0.15s ease;
+}
+
+.footer-link:hover {
+  color: #f0f0f0;
+}
