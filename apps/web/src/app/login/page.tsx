@@ -1,28 +1,38 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+  const router = useRouter();
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    router.push("/dashboard");
+  }
+
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-4"
       style={{ backgroundColor: "#05090f", color: "#f0f0f0" }}
     >
-      {/* Logo */}
-      <Link href="/" className="mb-0">
-        <Image src="/logo.svg" alt="pipntick" width={160} height={160} priority />
-      </Link>
-
       {/* Card */}
       <div
-        className="w-full max-w-sm rounded-xl p-8"
+        className="w-full max-w-sm rounded-xl px-8 py-5"
         style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}
       >
+        {/* Logo */}
+        <Link href="/" className="flex justify-center mb-2">
+          <Image src="/logo.svg" alt="pipntick" width={180} height={180} priority />
+        </Link>
+
         <h1 className="text-2xl font-bold tracking-tight mb-1">Welcome back</h1>
         <p className="text-sm mb-8" style={{ color: "#8899aa" }}>
           Log in to your pipntick account.
         </p>
 
-        <form className="flex flex-col gap-4">
+        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           {/* Email */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium" style={{ color: "#8899aa" }}>

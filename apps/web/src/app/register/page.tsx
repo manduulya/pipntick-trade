@@ -7,16 +7,16 @@ export default function RegisterPage() {
       className="min-h-screen flex flex-col items-center justify-center px-4"
       style={{ backgroundColor: "#05090f", color: "#f0f0f0" }}
     >
-      {/* Logo */}
-      <Link href="/" className="mb-0">
-        <Image src="/logo.svg" alt="pipntick" width={160} height={160} priority />
-      </Link>
-
       {/* Card */}
       <div
-        className="w-full max-w-sm rounded-xl p-8"
+        className="w-full max-w-sm rounded-xl px-8 py-5"
         style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}
       >
+        {/* Logo */}
+        <Link href="/" className="flex justify-center mb-2">
+          <Image src="/logo.svg" alt="pipntick" width={180} height={180} priority />
+        </Link>
+
         <h1 className="text-2xl font-bold tracking-tight mb-1">Create your account</h1>
         <p className="text-sm mb-8" style={{ color: "#8899aa" }}>
           Start tracking your trades today.
