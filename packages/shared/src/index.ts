@@ -1,24 +1,125 @@
 // Shared types between web and api
 
-export interface Trade {
-  id: string;
-  symbol: string;
-  side: "buy" | "sell";
-  quantity: number;
-  price: number;
-  timestamp: string;
-}
+export type TradeDirection = "long" | "short";
+export type TradeStatus = "open" | "closed";
+export type TradeSource = "manual" | "screenshot" | "mt4";
 
-export interface Portfolio {
+export interface TradingAccount {
   id: string;
   userId: string;
-  positions: Position[];
-  totalValue: number;
+  name: string;
+  broker: string | null;
+  currency: string;
+  startingBalance: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface Position {
+// Numeric columns are serialized as strings (Postgres numeric -> drizzle -> JSON)
+export interface Trade {
+  id: string;
+  accountId: string;
   symbol: string;
-  quantity: number;
-  avgCost: number;
-  currentPrice: number;
+  direction: TradeDirection;
+  status: TradeStatus;
+  entryPrice: string;
+  exitPrice: string | null;
+  lotSize: string;
+  pnl: string | null;
+  pnlManual: boolean;
+  /** Signed broker adjustments already folded into pnl (negative = a cost). */
+  swap: string | null;
+  commission: string | null;
+  entryTime: string;
+  exitTime: string | null;
+  session: string | null;
+  source: TradeSource;
+  screenshotUrl: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const FOREX_PAIR_RE = /^[A-Z]{3}\/[A-Z]{3}$/;
+
+// 1 lot = 100 troy oz for gold, 5,000 troy oz for silver — standard MT4/5 convention.
+const CONTRACT_SIZE_OVERRIDES: Record<string, number> = {
+  "XAU/USD": 100,
+  "XAG/USD": 5000,
+};
+
+/**
+ * Standard contract size for 1.0 lot, used to auto-calculate P&L from raw price diff.
+ * Forex pairs: 1 lot = 100,000 units of base currency. Metals: see overrides above.
+ * Everything else (stocks, indices, crypto) defaults to 1 — "lot" is treated as the
+ * raw unit entered (shares, contracts, coins) since those conventions vary by broker.
+ */
+export function getContractSize(symbol: string): number {
+  const s = symbol.trim().toUpperCase();
+  if (s in CONTRACT_SIZE_OVERRIDES) return CONTRACT_SIZE_OVERRIDES[s];
+  if (FOREX_PAIR_RE.test(s)) return 100000;
+  return 1;
+}
+
+export interface CreateAccountInput {
+  name: string;
+  broker?: string;
+  currency?: string;
+  startingBalance?: number;
+  /** ISO date/time string. Update-only — when should account history start counting from. */
+  createdAt?: string;
+}
+
+export interface CreateTradeInput {
+  accountId?: string;
+  symbol: string;
+  direction: TradeDirection;
+  entryPrice: number;
+  exitPrice?: number;
+  lotSize: number;
+  entryTime: string;
+  exitTime?: string;
+  session?: string;
+  notes?: string;
+  source?: TradeSource;
+  screenshotUrl?: string;
+  /** Manual P&L override. Omit to auto-calculate from entry/exit/lot/contract size (+ swap/commission). */
+  pnl?: number;
+  /** Signed broker adjustments (negative = a cost). Folded into the auto-calculated pnl. */
+  swap?: number;
+  commission?: number;
+}
+
+/** Trade fields extracted from a broker screenshot via OCR. Any field can be null if not legible/present. */
+export interface ParsedTradeScreenshot {
+  symbol: string | null;
+  direction: TradeDirection | null;
+  entryPrice: number | null;
+  exitPrice: number | null;
+  lotSize: number | null;
+  /** ISO-like "YYYY-MM-DDTHH:mm:ss", transcribed as shown (no timezone conversion). */
+  entryDateTime: string | null;
+  exitDateTime: string | null;
+  pnl: number | null;
+  swap: number | null;
+  commission: number | null;
+}
+
+export interface Quote {
+  content: string;
+  author: string;
+}
+
+export interface PerformanceSummary {
+  period: "weekly" | "monthly" | "yearly";
+  pnl: number;
+  winRate: number;
+  profitFactor: number | null;
+  avgWin: number;
+  avgLoss: number;
+  totalTrades: number;
+  avgDurationMinutes: number;
+  byInstrument: { symbol: string; trades: number; pnl: number; winRate: number }[];
+  byDirection: { direction: TradeDirection; trades: number; pnl: number; winRate: number; avgPnl: number }[];
 }

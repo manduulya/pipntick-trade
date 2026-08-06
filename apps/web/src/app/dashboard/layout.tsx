@@ -2,8 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useClerk, useUser } from "@clerk/nextjs";
 import QuoteBar from "./QuoteBar";
+import AccountSwitcher from "./AccountSwitcher";
+import { SelectedAccountProvider } from "../../lib/account-context";
 
 const navItems = [
   {
@@ -73,8 +76,15 @@ const bottomItems = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user } = useUser();
+  const { signOut } = useClerk();
+
+  const displayName = user?.fullName || user?.primaryEmailAddress?.emailAddress || "Trader";
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
+    <SelectedAccountProvider>
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "#05090f" }}>
       {/* Sidebar */}
       <aside
@@ -85,6 +95,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Link href="/" className="flex justify-center mb-4 px-2">
           <Image src="/logo.svg" alt="pipntick" width={140} height={140} priority />
         </Link>
+
+        {/* Account switcher */}
+        <AccountSwitcher />
 
         {/* Nav */}
         <nav className="flex flex-col gap-0.5 flex-1">
@@ -138,12 +151,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
               style={{ backgroundColor: "rgba(123,193,59,0.15)", color: "#7bc13b" }}
             >
-              J
+              {initial}
             </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-medium truncate" style={{ color: "#f0f0f0" }}>John Doe</span>
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="text-xs font-medium truncate" style={{ color: "#f0f0f0" }}>{displayName}</span>
               <span className="text-xs truncate" style={{ color: "#4a5d70" }}>Free plan</span>
             </div>
+            <button
+              type="button"
+              onClick={() => signOut(() => router.push("/login"))}
+              title="Log out"
+              className="shrink-0 p-1.5 rounded-md transition-colors"
+              style={{ color: "#8899aa" }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "#e05252"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "#8899aa"; }}
+            >
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 5v1a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h5a2 2 0 012 2v1" />
+              </svg>
+            </button>
           </div>
         </div>
       </aside>
@@ -156,5 +182,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {children}
       </main>
     </div>
+    </SelectedAccountProvider>
   );
 }

@@ -1,18 +1,41 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
+import { registerAuth } from "./lib/auth";
+import { accountRoutes } from "./routes/accounts";
+import { selfAccountRoutes } from "./routes/account";
+import { tradeRoutes } from "./routes/trades";
+import { performanceRoutes } from "./routes/performance";
+import { screenshotRoutes } from "./routes/screenshot";
+import { quoteRoutes } from "./routes/quote";
 
-const app = Fastify({ logger: true });
+// Default 1MB body limit is too small for base64-encoded screenshot uploads.
+const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
 
-app.get("/health", async () => {
-  return { status: "ok" };
-});
+async function start() {
+  await app.register(cors, {
+    origin: process.env.CORS_ORIGIN ?? "http://localhost:3000",
+  });
 
-const start = async () => {
+  app.get("/health", async () => ({ status: "ok" }));
+
+  // Auth is only required inside this scope, so /health stays up even
+  // without Clerk keys configured.
+  await app.register(async (api) => {
+    await registerAuth(api);
+    await api.register(accountRoutes);
+    await api.register(selfAccountRoutes);
+    await api.register(tradeRoutes);
+    await api.register(performanceRoutes);
+    await api.register(screenshotRoutes);
+    await api.register(quoteRoutes);
+  });
+
   try {
-    await app.listen({ port: 3001, host: "0.0.0.0" });
+    await app.listen({ port: Number(process.env.PORT) || 3001, host: "0.0.0.0" });
   } catch (err) {
     app.log.error(err);
     process.exit(1);
   }
-};
+}
 
 start();

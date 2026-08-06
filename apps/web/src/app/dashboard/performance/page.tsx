@@ -1,139 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
 } from "recharts";
-
-type Period = "weekly" | "monthly" | "yearly";
-
-// ── Mock data per period ───────────────────────────────────────────────────────
-
-const growthData: Record<Period, { label: string; value: number }[]> = {
-  weekly: [
-    { label: "Mon", value: 12000 }, { label: "Tue", value: 12180 },
-    { label: "Wed", value: 12050 }, { label: "Thu", value: 12320 },
-    { label: "Fri", value: 12450 },
-  ],
-  monthly: [
-    { label: "Jan", value: 9800  }, { label: "Feb", value: 10200 },
-    { label: "Mar", value: 9950  }, { label: "Apr", value: 10600 },
-    { label: "May", value: 11200 }, { label: "Jun", value: 10900 },
-    { label: "Jul", value: 11500 }, { label: "Aug", value: 11800 },
-    { label: "Sep", value: 11400 }, { label: "Oct", value: 12000 },
-    { label: "Nov", value: 11900 }, { label: "Dec", value: 12450 },
-  ],
-  yearly: [
-    { label: "2022", value: 7200  }, { label: "2023", value: 9100  },
-    { label: "2024", value: 10800 }, { label: "2025", value: 12450 },
-  ],
-};
-
-const pnlData: Record<Period, { label: string; pnl: number }[]> = {
-  weekly: [
-    { label: "Mon", pnl:  245 }, { label: "Tue", pnl: -120 },
-    { label: "Wed", pnl:  380 }, { label: "Thu", pnl:  175 },
-    { label: "Fri", pnl: -88  },
-  ],
-  monthly: [
-    { label: "Jan", pnl:  320 }, { label: "Feb", pnl: -150 },
-    { label: "Mar", pnl:  510 }, { label: "Apr", pnl:  290 },
-    { label: "May", pnl: -200 }, { label: "Jun", pnl:  440 },
-    { label: "Jul", pnl:  615 }, { label: "Aug", pnl: -95  },
-    { label: "Sep", pnl:  380 }, { label: "Oct", pnl:  520 },
-    { label: "Nov", pnl: -110 }, { label: "Dec", pnl:  685 },
-  ],
-  yearly: [
-    { label: "2022", pnl: 1200 }, { label: "2023", pnl: 1900 },
-    { label: "2024", pnl: 1700 }, { label: "2025", pnl: 2450 },
-  ],
-};
-
-type InstrumentRow = { symbol: string; trades: number; pnl: number; winRate: number };
-const instrumentData: Record<Period, InstrumentRow[]> = {
-  weekly: [
-    { symbol: "EUR/USD", trades: 3, pnl:  245.50, winRate: 67 },
-    { symbol: "NAS100",  trades: 2, pnl:  380.00, winRate: 100 },
-    { symbol: "XAU/USD", trades: 2, pnl: -120.00, winRate: 50 },
-    { symbol: "GBP/USD", trades: 1, pnl:   92.50, winRate: 100 },
-    { symbol: "US30",    trades: 1, pnl:  -88.00, winRate: 0  },
-  ],
-  monthly: [
-    { symbol: "EUR/USD", trades: 14, pnl:  1240.50, winRate: 71 },
-    { symbol: "GBP/USD", trades:  9, pnl:   875.20, winRate: 67 },
-    { symbol: "XAU/USD", trades:  8, pnl:  -320.00, winRate: 38 },
-    { symbol: "NAS100",  trades:  7, pnl:  1580.00, winRate: 86 },
-    { symbol: "US30",    trades:  5, pnl:   -95.40, winRate: 40 },
-    { symbol: "USD/JPY", trades:  4, pnl:   532.00, winRate: 75 },
-  ],
-  yearly: [
-    { symbol: "NAS100",  trades: 42, pnl:  4820.00, winRate: 83 },
-    { symbol: "EUR/USD", trades: 38, pnl:  3240.50, winRate: 68 },
-    { symbol: "GBP/USD", trades: 29, pnl:  2175.20, winRate: 62 },
-    { symbol: "XAU/USD", trades: 24, pnl: -1120.00, winRate: 42 },
-    { symbol: "USD/JPY", trades: 18, pnl:  1532.00, winRate: 72 },
-    { symbol: "US30",    trades: 12, pnl:  -295.40, winRate: 42 },
-  ],
-};
-
-type DirectionRow = { direction: string; trades: number; pnl: number; winRate: number; avgPnl: number };
-const directionData: Record<Period, DirectionRow[]> = {
-  weekly: [
-    { direction: "Long",  trades: 6, pnl:  592.00, winRate: 67, avgPnl:  98.67 },
-    { direction: "Short", trades: 3, pnl: -120.00, winRate: 33, avgPnl: -40.00 },
-  ],
-  monthly: [
-    { direction: "Long",  trades: 29, pnl: 2840.50, winRate: 72, avgPnl:  97.95 },
-    { direction: "Short", trades: 18, pnl:  971.80, winRate: 61, avgPnl:  53.99 },
-  ],
-  yearly: [
-    { direction: "Long",  trades: 98, pnl:  9240.50, winRate: 71, avgPnl:  94.29 },
-    { direction: "Short", trades: 65, pnl:  3171.80, winRate: 58, avgPnl:  48.80 },
-  ],
-};
-
-type PeriodStats = {
-  pnl: string; pnlPos: boolean;
-  winRate: string; winRateSub: string;
-  profitFactor: string;
-  avgWin: string; avgLoss: string;
-  trades: string; tradesSub: string;
-  avgDuration: string; avgDurationSub: string;
-};
-const periodStats: Record<Period, PeriodStats> = {
-  weekly: {
-    pnl: "+$592.00", pnlPos: true,
-    winRate: "67%", winRateSub: "6 wins / 3 losses",
-    profitFactor: "1.84",
-    avgWin: "+$180.50", avgLoss: "-$104.00",
-    trades: "9", tradesSub: "this week",
-    avgDuration: "1h 24m", avgDurationSub: "avg hold time",
-  },
-  monthly: {
-    pnl: "+$3,812.30", pnlPos: true,
-    winRate: "68.4%", winRateSub: "32 wins / 15 losses",
-    profitFactor: "2.08",
-    avgWin: "+$245.80", avgLoss: "-$118.40",
-    trades: "47", tradesSub: "this month",
-    avgDuration: "2h 08m", avgDurationSub: "avg hold time",
-  },
-  yearly: {
-    pnl: "+$12,412.30", pnlPos: true,
-    winRate: "69.3%", winRateSub: "115 wins / 51 losses",
-    profitFactor: "2.41",
-    avgWin: "+$261.20", avgLoss: "-$108.60",
-    trades: "163", tradesSub: "this year",
-    avgDuration: "1h 52m", avgDurationSub: "avg hold time",
-  },
-};
+import { useTrades } from "../../../lib/hooks";
+import { useSelectedAccount } from "../../../lib/account-context";
+import {
+  computeCharts, computeDirectionRows, computeInstrumentRows, computePeriodStats,
+  filterByPeriod, isClosed, periodLabel, periodOffsetFor, type Period,
+} from "../../../lib/trade-utils";
+import { ApiError } from "../../../lib/api";
+import EmptyAccountsState from "../EmptyAccountsState";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function fmtPnl(pnl: number) {
-  const abs = Math.abs(pnl);
-  const str = abs >= 1000 ? `$${(abs / 1000).toFixed(1)}k` : `$${abs.toFixed(0)}`;
+  const str = `$${Math.abs(pnl).toFixed(2)}`;
   return pnl >= 0 ? `+${str}` : `-${str}`;
+}
+
+function fmtAxisDollar(v: number) {
+  const abs = Math.abs(v);
+  const str = abs >= 1000 ? `$${(abs / 1000).toFixed(1)}k` : `$${Math.round(abs)}`;
+  return v < 0 ? `-${str}` : str;
 }
 
 const tooltipStyle = {
@@ -164,7 +55,12 @@ function PnlTooltip({ active, payload, label }: { active?: boolean; payload?: { 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function PerformancePage() {
+  const { data: trades, isLoading, isError, error } = useTrades();
+  const { accounts, selectedAccount } = useSelectedAccount();
+  const startingBalance = selectedAccount ? Number(selectedAccount.startingBalance) : 0;
+
   const [period, setPeriod] = useState<Period>("monthly");
+  const [offset, setOffset] = useState(0);
   type SortKey = "symbol" | "trades" | "winRate" | "pnl";
   type SortDir = "asc" | "desc";
   const [sortKey, setSortKey] = useState<SortKey>("pnl");
@@ -175,16 +71,51 @@ export default function PerformancePage() {
     else { setSortKey(key); setSortDir("desc"); }
   }
 
-  const ps = periodStats[period];
-  const instRows = [...instrumentData[period]].sort((a, b) => {
-    const mul = sortDir === "desc" ? -1 : 1;
-    if (sortKey === "symbol") return mul * a.symbol.localeCompare(b.symbol);
-    return mul * (a[sortKey] - b[sortKey]);
-  });
-  const dirs    = directionData[period];
-  const totalPnl = dirs[0].pnl + dirs[1].pnl;
-  const longPct  = Math.round((dirs[0].pnl / totalPnl) * 100);
+  function handlePeriodChange(p: Period) {
+    setPeriod(p);
+    setOffset(0);
+  }
+
+  // Can't page back further than the period the account was created in, or forward past "now".
+  const maxOffset = selectedAccount ? periodOffsetFor(period, new Date(selectedAccount.createdAt)) : 0;
+  const canGoBack = offset < maxOffset;
+  const canGoForward = offset > 0;
+
+  const allClosed = useMemo(() => (trades ?? []).filter(isClosed), [trades]);
+  const closed = useMemo(() => filterByPeriod(allClosed, period, offset), [allClosed, period, offset]);
+  const ps = useMemo(() => computePeriodStats(closed, period, offset), [closed, period, offset]);
+  const instRows = useMemo(() => {
+    const rows = computeInstrumentRows(closed);
+    return rows.sort((a, b) => {
+      const mul = sortDir === "desc" ? -1 : 1;
+      if (sortKey === "symbol") return mul * a.symbol.localeCompare(b.symbol);
+      return mul * (a[sortKey] - b[sortKey]);
+    });
+  }, [closed, sortKey, sortDir]);
+  const dirs = useMemo(() => computeDirectionRows(closed), [closed]);
+  const { growthData, pnlData } = useMemo(
+    () => computeCharts(allClosed, period, startingBalance, offset),
+    [allClosed, period, startingBalance, offset],
+  );
+
+  const totalDirPnl = dirs[0].pnl + dirs[1].pnl;
+  const longPct  = totalDirPnl !== 0 ? Math.round((dirs[0].pnl / totalDirPnl) * 100) : 50;
   const shortPct = 100 - longPct;
+  const portfolioValue = startingBalance + (trades ?? []).filter(isClosed).reduce((s, t) => s + Number(t.pnl), 0);
+
+  if (isLoading) {
+    return <div className="h-full flex items-center justify-center text-xs" style={{ color: "#4a5d70" }}>Loading performance...</div>;
+  }
+  if (isError) {
+    return (
+      <div className="h-full flex items-center justify-center text-xs" style={{ color: "#f87171" }}>
+        {error instanceof ApiError ? error.message : "Failed to load performance data."}
+      </div>
+    );
+  }
+  if (accounts.length === 0) {
+    return <EmptyAccountsState />;
+  }
 
   return (
     <div className="h-full flex flex-col gap-3 p-4 overflow-y-auto">
@@ -203,7 +134,7 @@ export default function PerformancePage() {
           {(["weekly", "monthly", "yearly"] as Period[]).map((p) => (
             <button
               key={p}
-              onClick={() => setPeriod(p)}
+              onClick={() => handlePeriodChange(p)}
               className="px-8 py-2 text-sm font-semibold rounded-xl capitalize hover:text-white cursor-pointer"
               style={{
                 backgroundColor: period === p ? "#7bc13b" : "transparent",
@@ -234,12 +165,39 @@ export default function PerformancePage() {
         </div>
       </div>
 
+      {/* Period navigation — back to account creation, forward to the current period */}
+      <div className="flex items-center justify-center gap-3 shrink-0">
+        <button
+          onClick={() => canGoBack && setOffset((o) => o + 1)}
+          disabled={!canGoBack}
+          className="p-1 rounded hover:opacity-70 cursor-pointer disabled:cursor-not-allowed disabled:hover:opacity-100"
+          style={{ color: canGoBack ? "#8899aa" : "#2a3d55" }}
+        >
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <span className="text-xs font-semibold min-w-[140px] text-center" style={{ color: "#f0f0f0" }}>
+          {periodLabel(period, offset)}
+        </span>
+        <button
+          onClick={() => canGoForward && setOffset((o) => o - 1)}
+          disabled={!canGoForward}
+          className="p-1 rounded hover:opacity-70 cursor-pointer disabled:cursor-not-allowed disabled:hover:opacity-100"
+          style={{ color: canGoForward ? "#8899aa" : "#2a3d55" }}
+        >
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
       {/* Period stats — fixed portfolio value first, then period-driven */}
       <div className="grid grid-cols-4 gap-3 shrink-0">
         {/* Portfolio value — always fixed */}
         <div className="rounded-xl px-4 py-3" style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}>
           <p className="text-xs font-medium mb-1" style={{ color: "#4a5d70" }}>Portfolio Value</p>
-          <p className="text-lg font-bold leading-tight" style={{ color: "#7bc13b" }}>$12,450.00</p>
+          <p className="text-lg font-bold leading-tight" style={{ color: "#7bc13b" }}>${portfolioValue.toFixed(2)}</p>
           <p className="text-xs mt-0.5" style={{ color: "#4a5d70" }}>all time</p>
         </div>
 
@@ -266,7 +224,7 @@ export default function PerformancePage() {
         <div className="rounded-xl p-4" style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}>
           <h2 className="text-sm font-semibold mb-4" style={{ color: "#f0f0f0" }}>Portfolio Growth</h2>
           <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={growthData[period]} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+            <AreaChart data={growthData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="growthGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor="#7bc13b" stopOpacity={0.2} />
@@ -275,8 +233,8 @@ export default function PerformancePage() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1a2d4a" vertical={false} />
               <XAxis dataKey="label" tick={{ fill: "#4a5d70", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#4a5d70", fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} width={36} />
-              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#ffffff" }} itemStyle={{ color: "#a3e05a" }} formatter={(v) => [`$${Number(v).toLocaleString()}`, "Portfolio"]} cursor={{ stroke: "#1a2d4a" }} />
+              <YAxis tick={{ fill: "#4a5d70", fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={fmtAxisDollar} width={36} />
+              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#ffffff" }} itemStyle={{ color: "#a3e05a" }} formatter={(v) => [v == null ? "—" : `$${Number(v).toLocaleString()}`, "Portfolio"]} cursor={{ stroke: "#1a2d4a" }} />
               <Area type="monotone" dataKey="value" stroke="#7bc13b" strokeWidth={2} fill="url(#growthGrad)" dot={false} activeDot={{ r: 4, fill: "#7bc13b", stroke: "#05090f", strokeWidth: 2 }} />
             </AreaChart>
           </ResponsiveContainer>
@@ -286,13 +244,13 @@ export default function PerformancePage() {
         <div className="rounded-xl p-4" style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}>
           <h2 className="text-sm font-semibold mb-4" style={{ color: "#f0f0f0" }}>P&L Breakdown</h2>
           <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={pnlData[period]} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+            <BarChart data={pnlData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1a2d4a" vertical={false} />
               <XAxis dataKey="label" tick={{ fill: "#4a5d70", fontSize: 12 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#4a5d70", fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} width={40} />
               <Tooltip content={<PnlTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
               <Bar dataKey="pnl" radius={[3, 3, 0, 0]} isAnimationActive>
-                {pnlData[period].map((entry, i) => (
+                {pnlData.map((entry, i) => (
                   <Cell key={i} fill={entry.pnl >= 0 ? "#7bc13b" : "#ef4444"} />
                 ))}
               </Bar>
@@ -350,6 +308,9 @@ export default function PerformancePage() {
               </span>
             </div>
           ))}
+          {instRows.length === 0 && (
+            <p className="text-xs py-6 text-center" style={{ color: "#4a5d70" }}>No closed trades in this period yet.</p>
+          )}
         </div>
 
         {/* Long vs Short */}

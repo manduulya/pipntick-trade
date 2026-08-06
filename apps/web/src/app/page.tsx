@@ -1,12 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
+import { SignedIn, SignedOut } from "@clerk/nextjs";
+import { currentUser } from "@clerk/nextjs/server";
 
 const features = [
   {
     icon: "◎",
     title: "Trade Logging",
     description:
-      "Log trades manually, import via CSV, upload screenshots, or sync live from MT4/MT5.",
+      "Log trades manually, upload screenshots, or sync live from MT4/MT5.",
   },
   {
     icon: "◈",
@@ -40,7 +42,10 @@ const features = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const user = await currentUser();
+  const displayName = user?.firstName || user?.fullName || user?.primaryEmailAddress?.emailAddress || "Trader";
+
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#05090f", color: "#f0f0f0" }}>
 
@@ -51,15 +56,22 @@ export default function Home() {
             <Image src="/logo.svg" alt="pipntick" width={120} height={120} priority />
           </Link>
           <div className="flex items-center gap-6">
-            <Link href="/news" className="nav-link text-sm">
-              Market News
-            </Link>
-            <Link href="/login" className="nav-link text-sm">
-              Log in
-            </Link>
-            <Link href="/register" className="neon-btn text-sm font-medium px-4 py-2 rounded-md">
-              Get started
-            </Link>
+            <SignedOut>
+              <Link href="/login" className="nav-link text-sm">
+                Log in
+              </Link>
+              <Link href="/register" className="neon-btn text-sm font-medium px-4 py-2 rounded-md">
+                Get started
+              </Link>
+            </SignedOut>
+            <SignedIn>
+              <span className="text-sm" style={{ color: "#8899aa" }}>
+                Hello {displayName}!
+              </span>
+              <Link href="/dashboard" className="neon-btn text-sm font-medium px-4 py-2 rounded-md">
+                Dashboard
+              </Link>
+            </SignedIn>
           </div>
         </nav>
       </header>
@@ -90,12 +102,19 @@ export default function Home() {
           </p>
 
           <div className="flex items-center justify-center gap-4 flex-wrap">
-            <Link href="/register" className="neon-btn font-semibold px-6 py-3 rounded-md text-sm">
-              Start for free
-            </Link>
-            <Link href="/login" className="ghost-btn text-sm font-medium px-6 py-3 rounded-md">
-              Log in →
-            </Link>
+            <SignedOut>
+              <Link href="/register" className="neon-btn font-semibold px-6 py-3 rounded-md text-sm">
+                Start for free
+              </Link>
+              <Link href="/login" className="ghost-btn text-sm font-medium px-6 py-3 rounded-md">
+                Log in →
+              </Link>
+            </SignedOut>
+            <SignedIn>
+              <Link href="/dashboard" className="neon-btn font-semibold px-6 py-3 rounded-md text-sm">
+                Go to dashboard →
+              </Link>
+            </SignedIn>
           </div>
         </div>
       </section>
@@ -133,9 +152,16 @@ export default function Home() {
           <p className="text-base mb-10" style={{ color: "#8899aa" }}>
             Join traders who use pipntick to build consistency and discipline.
           </p>
-          <Link href="/register" className="neon-btn font-semibold px-8 py-3 rounded-md text-sm inline-block">
-            Get started for free
-          </Link>
+          <SignedOut>
+            <Link href="/register" className="neon-btn font-semibold px-8 py-3 rounded-md text-sm inline-block">
+              Get started for free
+            </Link>
+          </SignedOut>
+          <SignedIn>
+            <Link href="/dashboard" className="neon-btn font-semibold px-8 py-3 rounded-md text-sm inline-block">
+              Go to dashboard
+            </Link>
+          </SignedIn>
         </div>
       </section>
 
@@ -144,9 +170,13 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-6 py-8 flex items-center justify-between text-xs" style={{ color: "#4a5d70" }}>
           <span>© 2026 pipntick.trade</span>
           <div className="flex gap-6">
-            <Link href="/news" className="footer-link">Market News</Link>
-            <Link href="/login" className="footer-link">Log in</Link>
-            <Link href="/register" className="footer-link">Register</Link>
+            <SignedOut>
+              <Link href="/login" className="footer-link">Log in</Link>
+              <Link href="/register" className="footer-link">Register</Link>
+            </SignedOut>
+            <SignedIn>
+              <Link href="/dashboard" className="footer-link">Dashboard</Link>
+            </SignedIn>
           </div>
         </div>
       </footer>
