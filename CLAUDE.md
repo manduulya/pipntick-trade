@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-pipntick.trade — a trading journal / performance analytics web app. Users log trades, view them on a calendar, analyze performance over time ranges, get AI analysis on individual trades, and check market news/economic calendar. See [docs/app-flow.md](docs/app-flow.md) for the full route map and page flow, and `docs/architecture/*.puml` (PlantUML, render with `plantuml.jar`) for C4 diagrams.
+pipntick.trade — a trading journal / performance analytics web app. Users log trades, view them on a calendar, analyze performance over time ranges, get AI analysis on individual trades, and check market news/economic calendar. See [docs/app-flow.md](docs/app-flow.md) for the full route map and page flow, and `docs/architecture/*.puml` (PlantUML, render with `plantuml.jar`) for C4 diagrams. [docs/production-readiness.md](docs/production-readiness.md) tracks the step-by-step checklist for taking Phase 1 to production on Railway — check it for current progress before assuming deploy/testing/infra work hasn't started.
 
 ## Phase 1 scope
 
@@ -76,6 +76,7 @@ pnpm --filter @pipntick/api dev     # api only (port 3001)
 pnpm build                          # turbo build (web + api)
 pnpm lint                           # turbo lint (next lint, web only has a lint script)
 pnpm typecheck                      # turbo typecheck (tsc --noEmit in every package)
+pnpm test                           # turbo test (vitest run in web, api, shared)
 ```
 
 Package-specific, run from `packages/db/`:
@@ -88,7 +89,21 @@ pnpm db:studio     # open Drizzle Studio
 pnpm db:seed       # run src/seed/index.ts
 ```
 
-There is no test runner configured in any package — don't assume `pnpm test` exists.
+**Testing**: Vitest, added to `apps/web`, `apps/api`, and `packages/shared` (each has its own
+`vitest.config.mts` + `test`/`test:watch` scripts); `packages/db` has none (no pure logic worth
+unit testing there). Tests live under each package's `src/test/`, mirroring the source tree they
+cover (e.g. `apps/api/src/routes/trades.ts` → `apps/api/src/test/routes/trades.pure.test.ts`) —
+not colocated next to the source file. In `apps/api`, files split `*.pure.test.ts` (pure
+functions, no I/O) vs `*.route.test.ts` (Fastify `app.inject()` route tests) where a route module
+has both. Route tests mock `@pipntick/db`'s `db` export with a minimal fake chainable query
+builder (`vi.hoisted` + `vi.mock`, see `apps/api/src/test/routes/trades.route.test.ts`) rather
+than hitting a real Postgres — `vi.importActual`
+for the real `trades`/`tradingAccounts` schema objects is safe since `postgres()` connects lazily
+and never touches the network just from being constructed. There's no real-Postgres integration
+test path yet (see [docs/production-readiness.md](docs/production-readiness.md) §7 for the
+tradeoff and what a future CI Postgres service container would unlock). `pnpm lint` currently fails
+on `apps/web` (`next lint` has no committed ESLint config and prompts interactively) — pre-existing,
+unrelated to the test setup.
 
 Env vars: `apps/web/.env.example` (Clerk keys), `apps/api/.env.example` (`DATABASE_URL`, Clerk keys, `CORS_ORIGIN`, `PORT`), and `packages/db/.env.example` (`DATABASE_URL`) show what's needed; copy each to `.env.local` (web) / `.env` (api, db).
 

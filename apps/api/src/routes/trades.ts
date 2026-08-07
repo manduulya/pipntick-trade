@@ -42,7 +42,7 @@ async function resolveAccountId(userId: string, requestedAccountId?: string) {
   return account?.id ?? null;
 }
 
-function computePnl(
+export function computePnl(
   direction: TradeDirection,
   entryPrice: number,
   exitPrice: number,

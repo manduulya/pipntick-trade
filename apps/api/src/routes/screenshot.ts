@@ -28,7 +28,7 @@ function toIso(datePart: string): string {
  * OCR text ordering isn't guaranteed to match the visual layout, so every field is best-effort
  * and falls back to null — the caller pre-fills a form for the user to review, not auto-saves.
  */
-function parseTradeCardText(text: string): ParsedTradeScreenshot {
+export function parseTradeCardText(text: string): ParsedTradeScreenshot {
   const result: ParsedTradeScreenshot = {
     symbol: null,
     direction: null,
