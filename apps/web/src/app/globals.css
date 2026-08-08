@@ -13,12 +13,89 @@
 
   --color-border: #1a2d4a;
   --color-border-subtle: #111e33;
+  /* Consolidates near-identical one-off "border on hover" hex values (#2a3d5a/#2a4060). */
+  --color-border-hover: #2a3d5a;
 
   --color-text-primary: #f0f0f0;
   --color-text-secondary: #8899aa;
   --color-text-muted: #4a5d70;
+  /* Fainter than muted — calendar days outside the current month, disabled nav chevrons, empty
+     P&L/session placeholders. Consolidates #2a3d55/#2a3d50. */
+  --color-text-disabled: #2a3d55;
+
+  /* Unifies three previously-inconsistent "negative" reds (#f87171/#ef4444/#e05252) used
+     interchangeably across the app — this is the value design-system/colors.md already
+     documents as the canonical Loss/Down color. */
+  --color-danger: #e05252;
+
+  /* Text color for content sitting ON TOP of a --color-green-primary background (e.g. .neon-btn).
+     Coincidentally equals --color-bg-base in dark mode, which is why this role didn't have its
+     own token before — but green-primary gets darker in light mode (for its own text-on-page
+     contrast reasons) and needs light text instead, so this can't just reuse bg-base. */
+  --color-on-primary: #05090f;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Light theme overrides. Plain (unlayered) CSS always wins over @theme's `@layer theme` output
+   regardless of selector specificity, so this doesn't need a matching [data-theme="dark"] block —
+   the @theme values above already serve as the dark default. data-theme is set on <html> by the
+   blocking script in app/layout.tsx before first paint (see lib/theme.ts) and kept in sync by
+   ThemeProvider (lib/theme-context.tsx) after that.
+   Contrast-checked against WCAG AA (4.5:1 body text) — see the theme implementation plan for the
+   ratios. --color-green-neon stays under AA even here; keep it decorative-only (glows, dots,
+   gradients) in light mode, never small text. */
+:root[data-theme="light"] {
+  --color-green-primary: #458019;
+  --color-green-secondary: #3f7818;
+  --color-green-neon: #6aab30;
+
+  --color-bg-base: #f7f9fc;
+  --color-bg-surface: #eef1f6;
+  --color-bg-card: #ffffff;
+  --color-bg-card-hover: #f2f5f9;
+
+  --color-border: #dbe2ea;
+  --color-border-subtle: #e8ecf1;
+  --color-border-hover: #c3ccd6;
+
+  --color-text-primary: #101720;
+  --color-text-secondary: #46586a;
+  --color-text-muted: #6b7785;
+  --color-text-disabled: #a3aebb;
+
+  --color-danger: #c0392b;
+  --color-on-primary: #ffffff;
+}
+
+/* Forces the dark palette on a subtree regardless of the page's overall theme — used for the
+   dashboard sidebar (see dashboard/layout.tsx's <aside data-theme="dark">), which stays dark even
+   when the rest of the app is in light mode, by design. Deliberately NOT scoped to :root (unlike
+   the light block above) so it can win on a nested element too — a directly-targeted rule always
+   beats an inherited value, regardless of specificity, so this correctly overrides whatever the
+   ancestor <html> inherited down. Duplicates the @theme block's dark defaults since Tailwind's
+   @theme only ever emits them scoped to :root — keep the two in sync by hand. */
+[data-theme="dark"] {
+  --color-green-primary: #7bc13b;
+  --color-green-secondary: #80c342;
+  --color-green-neon: #a3e05a;
+
+  --color-bg-base: #05090f;
+  --color-bg-surface: #0b1220;
+  --color-bg-card: #0f1a2e;
+  --color-bg-card-hover: #142138;
+
+  --color-border: #1a2d4a;
+  --color-border-subtle: #111e33;
+  --color-border-hover: #2a3d5a;
+
+  --color-text-primary: #f0f0f0;
+  --color-text-secondary: #8899aa;
+  --color-text-muted: #4a5d70;
+  --color-text-disabled: #2a3d55;
+
+  --color-danger: #e05252;
+  --color-on-primary: #05090f;
 }
 
 * {
@@ -26,29 +103,35 @@
 }
 
 html {
-  background-color: #05090f;
-  color: #f0f0f0;
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
   scroll-behavior: smooth;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Neon glow utilities */
+/* Neon glow utilities. The rgba() glow shadows below stay as literal green-tinted values —
+   CSS custom properties can't be decomposed into rgba() channels without the newer
+   `rgb(from var(...) r g b / a)` relative-color syntax, and a glow effect is inherently a
+   dark-mode-tuned aesthetic anyway (it reads as "neon" specifically against near-black; on light
+   backgrounds it needs its own design pass, not just a value swap — revisit during the light-mode
+   visual pass). */
 .neon-text {
-  color: #7bc13b;
+  color: var(--color-green-primary);
   text-shadow:
     0 0 8px rgba(123, 193, 59, 0.6),
     0 0 24px rgba(123, 193, 59, 0.3);
 }
 
 .neon-border {
-  border-color: #7bc13b;
+  border-color: var(--color-green-primary);
   box-shadow:
     0 0 8px rgba(123, 193, 59, 0.3),
     inset 0 0 8px rgba(123, 193, 59, 0.05);
 }
 
 .neon-btn {
-  background-color: #7bc13b;
-  color: #05090f;
+  background-color: var(--color-green-primary);
+  color: var(--color-on-primary);
   box-shadow:
     0 0 16px rgba(123, 193, 59, 0.4),
     0 0 40px rgba(123, 193, 59, 0.15);
@@ -63,32 +146,32 @@ html {
 }
 
 .nav-link {
-  color: #8899aa;
+  color: var(--color-text-secondary);
   transition: color 0.15s ease;
 }
 
 .nav-link:hover {
-  color: #f0f0f0;
+  color: var(--color-text-primary);
 }
 
 .ghost-btn {
-  border: 1px solid #1a2d4a;
-  color: #8899aa;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
   transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .ghost-btn:hover {
-  border-color: #2a3d5a;
-  color: #f0f0f0;
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
 }
 
 .feature-card {
-  background-color: #05090f;
+  background-color: var(--color-bg-base);
   transition: background-color 0.15s ease;
 }
 
 .feature-card:hover {
-  background-color: #0b1220;
+  background-color: var(--color-bg-surface);
 }
 
 .gradient-radial-green {
@@ -102,4 +185,52 @@ html {
 
 .footer-link:hover {
   color: #f0f0f0;
+}
+
+/* Visible keyboard focus indicator — the default browser outline is invisible/low-contrast
+   against the page background in both themes, so every interactive element in the dashboard
+   shell should use this instead of relying on the default. Only shows for keyboard focus
+   (:focus-visible), not mouse clicks. Uses green-primary rather than green-neon: neon only
+   measures ~2.8:1 in light mode, under the 3:1 minimum WCAG requires for non-text UI indicators
+   like focus rings — primary clears 3:1 in both themes. */
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-green-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Immediate press feedback for buttons/links — pairs with the hover transition already on the
+   element so a click reads as a distinct, felt action rather than an instant state swap. */
+.press-scale {
+  transition: transform 0.1s ease;
+}
+
+.press-scale:active {
+  transform: scale(0.97);
+}
+
+/* Native View Transitions crossfade (see ViewTransitionLink.tsx) — default browser timing is a bit
+   quick/linear, this matches the 200-300ms ease used for other motion in the app. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.28s;
+  animation-timing-function: ease;
+}
+
+/* Respect the OS-level motion preference across the app — neutralizes both CSS transitions/
+   animations and the inline-style transitions used by hand-rolled fades (e.g. QuoteBar,
+   PageTransition), since author-stylesheet !important beats an inline style without one. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

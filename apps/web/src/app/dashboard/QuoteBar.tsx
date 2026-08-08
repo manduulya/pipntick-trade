@@ -1,30 +1,23 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { useAuth } from "@clerk/nextjs";
+import type { Quote } from "@pipntick/shared";
+import { api } from "../../lib/api";
 
 const STORAGE_KEY = "pipntick_quote";
 const STORAGE_TS  = "pipntick_quote_ts";
 const TWELVE_HOURS = 12 * 60 * 60 * 1000;
 const SHINE_INTERVAL = 15 * 60 * 1000;
 
-type Quote = { content: string; author: string };
-
-// Tags to fetch trading/investing/motivational quotes
-const TAGS = ["success", "motivational", "business", "leadership"];
-
-async function fetchQuote(): Promise<Quote> {
-  const tag = TAGS[Math.floor(Math.random() * TAGS.length)];
-  try {
-    const res = await fetch(`https://api.quotable.io/random?tags=${tag}&minLength=40&maxLength=140`);
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    return { content: data.content, author: data.author };
-  } catch {
-    return { content: "The stock market is a device for transferring money from the impatient to the patient.", author: "Warren Buffett" };
-  }
-}
+// Fallback only — used if the API is unreachable, not the everyday path.
+const FALLBACK_QUOTE: Quote = {
+  content: "The stock market is a device for transferring money from the impatient to the patient.",
+  author: "Warren Buffett",
+};
 
 export default function QuoteBar() {
+  const { getToken } = useAuth();
   const [quote, setQuote]     = useState<Quote | null>(null);
   const [visible, setVisible] = useState(false);
   const [shine, setShine]     = useState(false);
@@ -40,7 +33,7 @@ export default function QuoteBar() {
       if (stored && storedTs && now - Number(storedTs) < TWELVE_HOURS) {
         setQuote(JSON.parse(stored));
       } else {
-        const q = await fetchQuote();
+        const q = await api.quote.get(await getToken()).catch(() => FALLBACK_QUOTE);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(q));
         localStorage.setItem(STORAGE_TS, String(now));
         setQuote(q);
@@ -98,14 +91,18 @@ export default function QuoteBar() {
         }}
       />
 
+      {/* No truncation anywhere. Below lg it wraps within its full-width row (there's no room to
+          go single-line without overflowing a phone). At lg+ it's a floating, uncapped-width
+          corner element (see its wrapper in dashboard/layout.tsx) with room to grow leftward, so
+          it stays on one line instead of wrapping. */}
       <p
-        className="text-xs"
-        style={{ color: "#8899aa", fontStyle: "italic", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+        className="text-base lg:whitespace-nowrap"
+        style={{ color: "var(--color-text-secondary)", fontStyle: "italic" }}
       >
-        <span style={{ color: "#a3e05a" }}>"</span>
+        <span style={{ color: "var(--color-green-neon)" }}>"</span>
         {quote.content}
-        <span style={{ color: "#a3e05a" }}>"</span>
-        <span className="ml-2 not-italic font-medium" style={{ color: "#4a5d70" }}>
+        <span style={{ color: "var(--color-green-neon)" }}>"</span>
+        <span className="ml-2 not-italic font-medium" style={{ color: "var(--color-text-muted)" }}>
           — {quote.author}
         </span>
       </p>

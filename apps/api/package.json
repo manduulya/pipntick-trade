@@ -3,21 +3,28 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@clerk/fastify": "^2",
-    "@pipntick/shared": "workspace:*",
-    "fastify": "^5",
+    "@fastify/cors": "^10",
     "@fastify/websocket": "^10",
-    "@fastify/cors": "^10"
+    "@pipntick/db": "workspace:*",
+    "@pipntick/shared": "workspace:*",
+    "drizzle-orm": "^0.44.0",
+    "fastify": "^5",
+    "jimp": "^1.6.1",
+    "tesseract.js": "^5"
   },
   "devDependencies": {
     "@types/node": "^22",
     "tsx": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }
