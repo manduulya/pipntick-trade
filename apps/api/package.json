@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
-    "build": "tsc",
-    "start": "node --env-file-if-exists=.env dist/index.js",
+    "build": "tsc --noEmit",
+    "start": "tsx --env-file-if-exists=.env src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -19,11 +19,11 @@
     "drizzle-orm": "^0.44.0",
     "fastify": "^5",
     "jimp": "^1.6.1",
-    "tesseract.js": "^5"
+    "tesseract.js": "^5",
+    "tsx": "^4"
   },
   "devDependencies": {
     "@types/node": "^22",
-    "tsx": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

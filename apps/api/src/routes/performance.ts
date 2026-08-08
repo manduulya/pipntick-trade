@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq, gte } from "drizzle-orm";
 import { db, tradingAccounts, trades } from "@pipntick/db";
-import { getUserId } from "../lib/auth";
-import { getDefaultAccount } from "../lib/ensure-account";
+import { getUserId } from "../lib/auth.js";
+import { getDefaultAccount } from "../lib/ensure-account.js";
 
 type Period = "weekly" | "monthly" | "yearly";
 const PERIODS: Period[] = ["weekly", "monthly", "yearly"];

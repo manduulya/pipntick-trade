@@ -21,14 +21,20 @@ installed yet.
       automatically — Railway's per-service port injection needs no code change.
 
 ## 1. Database
-- [ ] Provision a Postgres service on Railway (in a **new** project, separate from the minemaster one).
+- [x] Provision a Postgres service on Railway — project `pipntick`, environment `production`,
+      service `Postgres`, separate from the minemaster project.
 - [x] Run `pnpm db:generate` from `packages/db/` to produce the first real migration —
       `packages/db/migrations/0000_clumsy_komodo.sql` now exists (3 tables: `users`,
       `trading_accounts`, `trades`, matching enums and FKs — generated purely from schema
       introspection, no live DB connection needed for `generate` itself).
-- [ ] Run `pnpm db:migrate` against the Railway Postgres to apply it. Use `db:migrate` as the
-      production sync path going forward, not `db:push`. **Needs the Railway `DATABASE_URL`
-      first** (previous checklist item) — can't run until that service exists.
+- [x] Run `pnpm db:migrate` against the Railway Postgres to apply it. Applied via a temporary
+      `railway connect postgres --tunnel-only --ssh` tunnel (SSH, not the public TCP proxy — no
+      public exposure) rather than making the database publicly reachable; verified afterward via
+      a one-off `postgres` query that all 3 tables exist. Requires a Railway-registered SSH key
+      (`railway ssh keys add`) and the Railway CLI (`npm i -g @railway/cli`) — both now set up on
+      this machine, plus the `use-railway` agent skill/MCP (`railway setup agent`) for future
+      Railway operations from this session. Use `db:migrate` as the production sync path going
+      forward, not `db:push`.
 
 ## 2. Auth (Clerk)
 - [ ] Shippable as-is with current test-mode keys (`pk_test_`/`sk_test_`) — not a blocker for
@@ -38,13 +44,37 @@ installed yet.
       alongside the domain step below.
 
 ## 3. Railway service setup
-- [ ] New Railway **project** (not added into the minemaster one).
-- [ ] Three services: `apps/web`, `apps/api`, Postgres plugin.
-- [ ] Set **Root Directory** per service + explicit build/start commands — Nixpacks won't
-      correctly auto-detect a pnpm-filtered monorepo:
+- [x] New Railway **project** (`pipntick`, not added into the minemaster one).
+- [x] Services: `api` and `web` created via Railway's TypeScript Infrastructure-as-Code
+      (`.railway/railway.ts`, `railway config apply`) alongside the existing `Postgres` service.
+      Three stray empty services from earlier manual dashboard setup (`compassionate-exploration`,
+      `beautiful-determination`, `pipntick-trade`) were left untouched, not deleted — pending a
+      cleanup pass.
+- [x] **Correction from the original plan**: do **not** set Root Directory per service. This repo
+      is a "Shared monorepo" — `apps/api`/`apps/web` depend on `packages/shared`/`packages/db` via
+      `workspace:*`, so isolating a service to its `apps/*` subdirectory would hide those sibling
+      packages from the build. Instead, `.railway/railway.ts` sets only `build`/`deploy` commands,
+      with the full repo checkout as build context:
   - web: `pnpm install --frozen-lockfile && pnpm --filter @pipntick/web build` /
     `pnpm --filter @pipntick/web start`
-  - api: same pattern with `@pipntick/api` (build runs `tsc`, start runs `node dist/index.js`)
+  - api: `pnpm install --frozen-lockfile && pnpm --filter @pipntick/api build` (now just
+    `tsc --noEmit`, a type-check gate) / `pnpm --filter @pipntick/api start` (now `tsx
+    --env-file-if-exists=.env src/index.ts`, matching `dev` — see note below).
+- [x] **Real bug found and fixed via this first deploy attempt**: `api`'s original production
+      path (`tsc` emit to `dist/` + `node dist/index.js`) crashed on boot with
+      `ERR_MODULE_NOT_FOUND` — the compiled output's relative imports (`from "./lib/auth"`) have
+      no file extension, which Node's own ESM resolver requires and `tsx`/dev never needed. This
+      path was never actually exercised before (dev always uses `tsx watch`), so it shipped
+      untested. Fixed by running `tsx` directly in production too (`start` script), rather than
+      chasing extension fixes through every workspace package Node's resolver would otherwise
+      need them in (`packages/db`'s raw, un-built TS source hit the same issue one level deeper).
+      Verified locally (clean boot + health check) and via 84 passing tests before redeploying.
+- [ ] `web`'s first deploy attempt failed for an unrelated, expected reason: `next build`
+      prerenders `/` and `ClerkProvider` throws on a missing `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+      — this project has never had real Clerk keys (see Section 2). Blocked on that.
+- [ ] Redeploy `api` with the fix above and confirm it goes green.
+- [ ] Clean up the 3 stray empty services once confirmed unneeded (with explicit confirmation
+      first — low risk since none have ever deployed, but destructive).
 
 ## 4. Domain (Namecheap)
 - [ ] Decide the split — likely apex/`www` → web, `api.pipntick.trade` → api.

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { createWorker, PSM } from "tesseract.js";
 import { Jimp, JimpMime } from "jimp";
 import type { ParsedTradeScreenshot } from "@pipntick/shared";
-import { getUserId } from "../lib/auth";
+import { getUserId } from "../lib/auth.js";
 
 type ParseBody = { image?: string };
 
