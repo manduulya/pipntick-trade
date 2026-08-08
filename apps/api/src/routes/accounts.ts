@@ -29,6 +29,16 @@ export async function accountRoutes(app: FastifyInstance) {
     const body = request.body as CreateAccountBody;
     if (!body?.name) return reply.code(400).send({ error: "name is required" });
 
+    // A brand-new account has no trades yet, so unlike the PATCH path there's no earliest-trade
+    // conflict to check against — just that the date itself is valid and not in the future.
+    let createdAt: Date | undefined;
+    if (body.createdAt !== undefined) {
+      const parsed = new Date(body.createdAt);
+      if (Number.isNaN(parsed.getTime())) return reply.code(400).send({ error: "createdAt is not a valid date" });
+      if (parsed.getTime() > Date.now()) return reply.code(400).send({ error: "createdAt cannot be in the future" });
+      createdAt = parsed;
+    }
+
     await ensureUser(userId);
 
     const [account] = await db
@@ -40,6 +50,7 @@ export async function accountRoutes(app: FastifyInstance) {
         currency: body.currency ?? "USD",
         startingBalance: body.startingBalance !== undefined ? String(body.startingBalance) : "0",
         isDefault: false,
+        ...(createdAt !== undefined ? { createdAt } : {}),
       })
       .returning();
 

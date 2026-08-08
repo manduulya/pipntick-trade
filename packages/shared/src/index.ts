@@ -67,7 +67,8 @@ export interface CreateAccountInput {
   broker?: string;
   currency?: string;
   startingBalance?: number;
-  /** ISO date/time string. Update-only — when should account history start counting from. */
+  /** ISO date/time string — when account history should start counting from. Optional on both
+   * create and update; defaults to now if omitted at creation. */
   createdAt?: string;
 }
 
