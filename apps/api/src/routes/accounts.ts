@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { and, asc, eq } from "drizzle-orm";
 import { db, tradingAccounts, trades } from "@pipntick/db";
-import { getUserId } from "../lib/auth";
-import { ensureUser } from "../lib/ensure-account";
+import { getUserId } from "../lib/auth.js";
+import { ensureUser } from "../lib/ensure-account.js";
 
 type CreateAccountBody = {
   name: string;

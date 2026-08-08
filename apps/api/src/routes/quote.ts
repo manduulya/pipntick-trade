@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Quote } from "@pipntick/shared";
-import { getUserId } from "../lib/auth";
+import { getUserId } from "../lib/auth.js";
 
 const MIN_LENGTH = 40;
 const MAX_LENGTH = 140;

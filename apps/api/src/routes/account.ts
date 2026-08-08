@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
 import { clerkClient } from "@clerk/fastify";
 import { db, users } from "@pipntick/db";
-import { getUserId, DEV_AUTH_BYPASS } from "../lib/auth";
+import { getUserId, DEV_AUTH_BYPASS } from "../lib/auth.js";
 
 export async function selfAccountRoutes(app: FastifyInstance) {
   app.delete("/api/account", async (request, reply) => {

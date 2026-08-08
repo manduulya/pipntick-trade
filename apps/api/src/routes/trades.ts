@@ -2,8 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { and, desc, eq } from "drizzle-orm";
 import { db, tradingAccounts, trades } from "@pipntick/db";
 import { getContractSize } from "@pipntick/shared";
-import { getUserId } from "../lib/auth";
-import { getDefaultAccount } from "../lib/ensure-account";
+import { getUserId } from "../lib/auth.js";
+import { getDefaultAccount } from "../lib/ensure-account.js";
 
 type TradeDirection = "long" | "short";
 type TradeSource = "manual" | "screenshot" | "mt4";

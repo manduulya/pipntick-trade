@@ -1,12 +1,12 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { registerAuth } from "./lib/auth";
-import { accountRoutes } from "./routes/accounts";
-import { selfAccountRoutes } from "./routes/account";
-import { tradeRoutes } from "./routes/trades";
-import { performanceRoutes } from "./routes/performance";
-import { screenshotRoutes } from "./routes/screenshot";
-import { quoteRoutes } from "./routes/quote";
+import { registerAuth } from "./lib/auth.js";
+import { accountRoutes } from "./routes/accounts.js";
+import { selfAccountRoutes } from "./routes/account.js";
+import { tradeRoutes } from "./routes/trades.js";
+import { performanceRoutes } from "./routes/performance.js";
+import { screenshotRoutes } from "./routes/screenshot.js";
+import { quoteRoutes } from "./routes/quote.js";
 
 // Default 1MB body limit is too small for base64-encoded screenshot uploads.
 const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
