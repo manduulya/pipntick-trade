@@ -37,8 +37,11 @@ installed yet.
       forward, not `db:push`.
 
 ## 2. Auth (Clerk)
-- [ ] Shippable as-is with current test-mode keys (`pk_test_`/`sk_test_`) — not a blocker for
-      first deploy.
+- [x] Real Clerk **test-mode** app created (Email+Password, Google OAuth, Name field required at
+      sign-up) — `pk_test_`/`sk_test_` keys now set as Railway variables on both `api`
+      (`CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`) and `web` (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`,
+      `CLERK_SECRET_KEY`, plus the sign-in/up/redirect URL vars). Test-mode is shippable as-is —
+      not a blocker for first deploy.
 - [ ] When ready: create a Clerk **Production** instance, get `pk_live_`/`sk_live_` keys.
 - [ ] Add Clerk's required DNS records (e.g. `accounts.`/`clerk.` subdomains) in Namecheap
       alongside the domain step below.
@@ -69,10 +72,14 @@ installed yet.
       chasing extension fixes through every workspace package Node's resolver would otherwise
       need them in (`packages/db`'s raw, un-built TS source hit the same issue one level deeper).
       Verified locally (clean boot + health check) and via 84 passing tests before redeploying.
-- [ ] `web`'s first deploy attempt failed for an unrelated, expected reason: `next build`
+- [x] `web`'s first deploy attempt failed for an unrelated, expected reason: `next build`
       prerenders `/` and `ClerkProvider` throws on a missing `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-      — this project has never had real Clerk keys (see Section 2). Blocked on that.
-- [ ] Redeploy `api` with the fix above and confirm it goes green.
+      — this project had never had real Clerk keys. Resolved by creating a real Clerk app (see
+      Section 2) and setting the key as a Railway build-time variable.
+- [x] `api` redeployed with the `tsx`-start fix (`railway redeploy --from-source`) — green,
+      1/1 replica running, real Clerk auth active (dev-bypass log line no longer present).
+- [x] `web` redeployed with the real Clerk key — green, 1/1 replica running, clean boot
+      (`next start`, ready in <1s).
 - [ ] Clean up the 3 stray empty services once confirmed unneeded (with explicit confirmation
       first — low risk since none have ever deployed, but destructive).
 
