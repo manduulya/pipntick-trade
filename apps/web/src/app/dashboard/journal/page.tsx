@@ -10,15 +10,16 @@ import { ApiError } from "../../../lib/api";
 import EmptyAccountsState from "../EmptyAccountsState";
 import InstrumentInput from "../InstrumentInput";
 import Toast from "../Toast";
+import { useTheme } from "../../../lib/theme-context";
 
 type EntryMethod = "manual" | "screenshot";
 type SortKey = "date" | "instrument" | "direction" | "pnl" | "duration";
 type SortDir = "asc" | "desc";
 
 const inputStyle: React.CSSProperties = {
-  backgroundColor: "#05090f",
-  border: "1px solid #1a2d4a",
-  color: "#f0f0f0",
+  backgroundColor: "var(--color-bg-base)",
+  border: "1px solid var(--color-border)",
+  color: "var(--color-text-primary)",
   borderRadius: 6,
   fontSize: 12,
   padding: "7px 10px",
@@ -47,19 +48,19 @@ function UploadZone({ accept, label, hint }: { accept: string; label: string; hi
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}
         className="flex flex-col items-center justify-center gap-2 rounded-xl cursor-pointer transition-all"
-        style={{ border: `2px dashed ${dragging ? "#7bc13b" : "#1a2d4a"}`, backgroundColor: dragging ? "rgba(123,193,59,0.05)" : "#05090f", padding: "32px 16px" }}
+        style={{ border: `2px dashed ${dragging ? "var(--color-green-primary)" : "var(--color-border)"}`, backgroundColor: dragging ? "rgba(123,193,59,0.05)" : "var(--color-bg-base)", padding: "32px 16px" }}
       >
         <input type="file" accept={accept} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); }} />
-        <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} style={{ color: dragging ? "#7bc13b" : "#1a2d4a" }}>
+        <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} style={{ color: dragging ? "var(--color-green-primary)" : "var(--color-border)" }}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
         </svg>
-        <p className="text-xs font-medium" style={{ color: dragging ? "#7bc13b" : "#8899aa" }}>{file ? file.name : label}</p>
-        <p className="text-[10px]" style={{ color: "#4a5d70" }}>{hint}</p>
+        <p className="text-xs font-medium" style={{ color: dragging ? "var(--color-green-primary)" : "var(--color-text-secondary)" }}>{file ? file.name : label}</p>
+        <p className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>{hint}</p>
       </label>
       {file && (
         <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(123,193,59,0.08)", border: "1px solid rgba(123,193,59,0.2)" }}>
-          <span className="text-[11px] truncate" style={{ color: "#a3e05a" }}>{file.name}</span>
-          <button onClick={() => setFile(null)} className="ml-2 shrink-0 hover:opacity-60" style={{ color: "#4a5d70" }}>
+          <span className="text-[11px] truncate" style={{ color: "var(--color-green-neon)" }}>{file.name}</span>
+          <button onClick={() => setFile(null)} className="ml-2 shrink-0 hover:opacity-60" style={{ color: "var(--color-text-muted)" }}>
             <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
@@ -160,39 +161,39 @@ function ManualEntryForm({ trade, onDone, onSaved }: { trade?: Trade; onDone: ()
   return (
     <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
       <InstrumentInput value={symbol} onChange={setSymbol} style={inputStyle} />
-      <div className="flex rounded-lg p-0.5 gap-0.5" style={{ backgroundColor: "#05090f", border: "1px solid #1a2d4a" }}>
+      <div className="flex rounded-lg p-0.5 gap-0.5" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
         {(["long", "short"] as const).map((d) => (
           <button key={d} type="button" onClick={() => setDirection(d)} className="flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-all"
             style={{
               backgroundColor: direction === d ? (d === "long" ? "rgba(123,193,59,0.2)" : "rgba(239,68,68,0.2)") : "transparent",
-              color: direction === d ? (d === "long" ? "#a3e05a" : "#f87171") : "#4a5d70",
+              color: direction === d ? (d === "long" ? "var(--color-green-neon)" : "var(--color-danger)") : "var(--color-text-muted)",
               border: direction === d ? `1px solid ${d === "long" ? "rgba(123,193,59,0.4)" : "rgba(239,68,68,0.4)"}` : "1px solid transparent",
             }}>
             {d === "long" ? "▲ Long" : "▼ Short"}
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "#4a5d70" }}>Entry Price</label><input type="number" step="any" placeholder="0.00" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} style={inputStyle} /></div>
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "#4a5d70" }}>Exit Price</label><input type="number" step="any" placeholder="0.00 (optional)" value={exitPrice} onChange={(e) => setExitPrice(e.target.value)} style={inputStyle} /></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Price</label><input type="number" step="any" placeholder="0.00" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} style={inputStyle} /></div>
+        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Price</label><input type="number" step="any" placeholder="0.00 (optional)" value={exitPrice} onChange={(e) => setExitPrice(e.target.value)} style={inputStyle} /></div>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "#4a5d70" }}>Entry Date & Time (UTC)</label><input type="datetime-local" value={entryDateTime} onChange={(e) => setEntryDateTime(e.target.value)} style={inputStyle} /></div>
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "#4a5d70" }}>Exit Date & Time (UTC)</label><input type="datetime-local" value={exitDateTime} onChange={(e) => setExitDateTime(e.target.value)} style={inputStyle} /></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Date & Time (UTC)</label><input type="datetime-local" value={entryDateTime} onChange={(e) => setEntryDateTime(e.target.value)} style={inputStyle} /></div>
+        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Date & Time (UTC)</label><input type="datetime-local" value={exitDateTime} onChange={(e) => setExitDateTime(e.target.value)} style={inputStyle} /></div>
       </div>
-      <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "#05090f", border: "1px solid #1a2d4a" }}>
-        <span className="text-[10px]" style={{ color: "#4a5d70" }}>Session</span>
-        <span className="text-[11px] font-semibold" style={{ color: session ? "#7bc13b" : "#2a3d55" }}>{session || "— enter entry time"}</span>
+      <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
+        <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Session</span>
+        <span className="text-[11px] font-semibold" style={{ color: session ? "var(--color-green-primary)" : "var(--color-text-disabled)" }}>{session || "— enter entry time"}</span>
       </div>
-      <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "#4a5d70" }}>Lot Size</label><input type="number" step="any" placeholder="0.01" value={lotSize} onChange={(e) => setLotSize(e.target.value)} style={inputStyle} /></div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "#4a5d70" }}>Swap</label><input type="number" step="any" placeholder="0.00 (optional)" value={swap} onChange={(e) => setSwap(e.target.value)} style={inputStyle} /></div>
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "#4a5d70" }}>Commission / Charges</label><input type="number" step="any" placeholder="0.00 (optional)" value={commission} onChange={(e) => setCommission(e.target.value)} style={inputStyle} /></div>
+      <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Lot Size</label><input type="number" step="any" placeholder="0.01" value={lotSize} onChange={(e) => setLotSize(e.target.value)} style={inputStyle} /></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Swap</label><input type="number" step="any" placeholder="0.00 (optional)" value={swap} onChange={(e) => setSwap(e.target.value)} style={inputStyle} /></div>
+        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Commission / Charges</label><input type="number" step="any" placeholder="0.00 (optional)" value={commission} onChange={(e) => setCommission(e.target.value)} style={inputStyle} /></div>
       </div>
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
-          <label className="text-[10px]" style={{ color: "#4a5d70" }}>P&L</label>
-          <label className="flex items-center gap-1.5 text-[10px] cursor-pointer" style={{ color: "#4a5d70" }}>
+          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>P&L</label>
+          <label className="flex items-center gap-1.5 text-[10px] cursor-pointer" style={{ color: "var(--color-text-muted)" }}>
             <input type="checkbox" checked={pnlOverride} onChange={(e) => setPnlOverride(e.target.checked)} className="cursor-pointer" />
             Override
           </label>
@@ -200,17 +201,17 @@ function ManualEntryForm({ trade, onDone, onSaved }: { trade?: Trade; onDone: ()
         {pnlOverride ? (
           <input type="number" step="any" placeholder="0.00" value={manualPnl} onChange={(e) => setManualPnl(e.target.value)} style={inputStyle} />
         ) : (
-          <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "#05090f", border: "1px solid #1a2d4a" }}>
-            <span className="text-[10px]" style={{ color: "#4a5d70" }}>Auto-calculated</span>
-            <span className="text-[11px] font-semibold" style={{ color: computedPnl === null ? "#2a3d55" : computedPnl >= 0 ? "#7bc13b" : "#f87171" }}>
+          <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
+            <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Auto-calculated</span>
+            <span className="text-[11px] font-semibold" style={{ color: computedPnl === null ? "var(--color-text-disabled)" : computedPnl >= 0 ? "var(--color-green-primary)" : "var(--color-danger)" }}>
               {computedPnl === null ? "— enter exit price" : `${computedPnl >= 0 ? "+" : ""}$${Math.abs(computedPnl).toFixed(2)}`}
             </span>
           </div>
         )}
       </div>
-      <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "#4a5d70" }}>Notes</label><textarea placeholder="Trade notes, setup, emotions..." rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, resize: "none" }} /></div>
+      <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Notes</label><textarea placeholder="Trade notes, setup, emotions..." rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, resize: "none" }} /></div>
       {mutation.isError && (
-        <p className="text-[11px]" style={{ color: "#f87171" }}>
+        <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>
           {mutation.error instanceof ApiError ? mutation.error.message : `Failed to ${isEdit ? "save" : "add"} trade.`}
         </p>
       )}
@@ -240,7 +241,7 @@ function AddTradeModal({ trade, onClose, onSaved }: { trade?: Trade; onClose: ()
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{
         backgroundColor: visible ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0)",
         backdropFilter: visible ? "blur(4px)" : "blur(0px)",
@@ -251,8 +252,8 @@ function AddTradeModal({ trade, onClose, onSaved }: { trade?: Trade; onClose: ()
       <div
         className="w-full max-w-md rounded-2xl overflow-hidden flex flex-col"
         style={{
-          backgroundColor: "#0b1220",
-          border: "1px solid #1a2d4a",
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
           maxHeight: "90vh",
           opacity: visible ? 1 : 0,
           transform: visible ? "translateY(0) scale(1)" : "translateY(16px) scale(0.97)",
@@ -260,9 +261,9 @@ function AddTradeModal({ trade, onClose, onSaved }: { trade?: Trade; onClose: ()
         }}
       >
         {/* Modal header */}
-        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: "1px solid #1a2d4a" }}>
-          <h2 className="text-sm font-bold" style={{ color: "#f0f0f0" }}>{isEdit ? "Edit Trade" : "Add Trade"}</h2>
-          <button onClick={handleClose} className="hover:opacity-60 transition-opacity" style={{ color: "#4a5d70" }}>
+        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: "1px solid var(--color-border)" }}>
+          <h2 className="text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>{isEdit ? "Edit Trade" : "Add Trade"}</h2>
+          <button onClick={handleClose} className="hover:opacity-60 transition-opacity" style={{ color: "var(--color-text-muted)" }}>
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
@@ -278,31 +279,36 @@ function AddTradeModal({ trade, onClose, onSaved }: { trade?: Trade; onClose: ()
                 onClick={() => setMethod(tab.id)}
                 className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold transition-all rounded-t-lg"
                 style={{
-                  color: active ? "#f0f0f0" : "#4a5d70",
-                  backgroundColor: active ? "#05090f" : "transparent",
-                  borderTop: active ? "1px solid #1a2d4a" : "1px solid transparent",
-                  borderLeft: active ? "1px solid #1a2d4a" : "1px solid transparent",
-                  borderRight: active ? "1px solid #1a2d4a" : "1px solid transparent",
-                  borderBottom: active ? "1px solid #05090f" : "1px solid transparent",
+                  color: active ? "var(--color-text-primary)" : "var(--color-text-muted)",
+                  backgroundColor: active ? "var(--color-bg-base)" : "transparent",
+                  borderTop: active ? "1px solid var(--color-border)" : "1px solid transparent",
+                  borderLeft: active ? "1px solid var(--color-border)" : "1px solid transparent",
+                  borderRight: active ? "1px solid var(--color-border)" : "1px solid transparent",
+                  borderBottom: active ? "1px solid var(--color-bg-base)" : "1px solid transparent",
                   marginBottom: active ? "-1px" : "0",
                 }}
               >
-                <span style={{ color: active ? "#7bc13b" : "#4a5d70" }}>{tab.icon}</span>
+                <span style={{ color: active ? "var(--color-green-primary)" : "var(--color-text-muted)" }}>{tab.icon}</span>
                 {tab.label}
               </button>
             );
           })}
         </div>
         )}
-        {!isEdit && <div style={{ height: 1, backgroundColor: "#1a2d4a", flexShrink: 0 }} />}
+        {!isEdit && <div style={{ height: 1, backgroundColor: "var(--color-border)", flexShrink: 0 }} />}
 
-        {/* Content — animated height */}
+        {/* Scroll region — bounds AnimatedContent against the panel's maxHeight:90vh via normal
+            flex remaining-space distribution, so tall content scrolls instead of silently
+            clipping. AnimatedContent itself is untouched: its scrollHeight measurement is
+            unaffected by an ancestor's overflow property. */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-5">
         <AnimatedContent method={isEdit ? "manual" : method}>
-        <div className="p-5 flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
           {(isEdit || method === "manual") && <ManualEntryForm trade={trade} onDone={handleClose} onSaved={onSaved} />}
           {!isEdit && method === "screenshot" && <UploadZone accept="image/*" label="Drop screenshot here or click to browse" hint="PNG, JPG, WEBP — AI will extract trade data" />}
         </div>
         </AnimatedContent>
+        </div>
       </div>
     </div>
   );
@@ -332,7 +338,7 @@ function DeleteTradeModal({ trade, onClose }: { trade: Trade; onClose: () => voi
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{
         backgroundColor: visible ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0)",
         backdropFilter: visible ? "blur(4px)" : "blur(0px)",
@@ -343,28 +349,28 @@ function DeleteTradeModal({ trade, onClose }: { trade: Trade; onClose: () => voi
       <div
         className="w-full max-w-md rounded-2xl overflow-hidden flex flex-col"
         style={{
-          backgroundColor: "#0b1220",
-          border: "1px solid #e05252",
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-danger)",
           opacity: visible ? 1 : 0,
           transform: visible ? "translateY(0) scale(1)" : "translateY(16px) scale(0.97)",
           transition: "opacity 0.3s ease, transform 0.3s ease",
         }}
       >
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #1a2d4a" }}>
-          <h2 className="text-sm font-bold" style={{ color: "#e05252" }}>Delete Trade</h2>
-          <button onClick={handleClose} className="hover:opacity-60 transition-opacity" style={{ color: "#4a5d70" }}>
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--color-border)" }}>
+          <h2 className="text-sm font-bold" style={{ color: "var(--color-danger)" }}>Delete Trade</h2>
+          <button onClick={handleClose} className="hover:opacity-60 transition-opacity" style={{ color: "var(--color-text-muted)" }}>
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
         <div className="flex flex-col gap-3 px-5 py-4">
-          <p className="text-xs leading-relaxed" style={{ color: "#8899aa" }}>
-            Delete the <span style={{ color: "#f0f0f0" }}>{trade.symbol}</span> trade from {trade.entryTime.slice(0, 10)}?
+          <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+            Delete the <span style={{ color: "var(--color-text-primary)" }}>{trade.symbol}</span> trade from {trade.entryTime.slice(0, 10)}?
             This cannot be undone.
           </p>
 
           {formError && (
-            <p className="text-[11px]" style={{ color: "#e05252" }}>{formError}</p>
+            <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>{formError}</p>
           )}
 
           <div className="flex gap-2 mt-1">
@@ -372,7 +378,7 @@ function DeleteTradeModal({ trade, onClose }: { trade: Trade; onClose: () => voi
               type="button"
               onClick={handleClose}
               className="flex-1 rounded-lg text-xs font-semibold py-2.5"
-              style={{ backgroundColor: "transparent", border: "1px solid #1a2d4a", color: "#8899aa" }}
+              style={{ backgroundColor: "transparent", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
             >
               Cancel
             </button>
@@ -381,7 +387,7 @@ function DeleteTradeModal({ trade, onClose }: { trade: Trade; onClose: () => voi
               disabled={deleteTrade.isPending}
               onClick={handleConfirm}
               className="flex-1 rounded-lg text-xs font-semibold py-2.5 transition-opacity"
-              style={{ backgroundColor: "#e05252", color: "#05090f", opacity: deleteTrade.isPending ? 0.6 : 1 }}
+              style={{ backgroundColor: "var(--color-danger)", color: "var(--color-bg-base)", opacity: deleteTrade.isPending ? 0.6 : 1 }}
             >
               {deleteTrade.isPending ? "Deleting..." : "Delete"}
             </button>
@@ -407,6 +413,10 @@ const COLS: { label: string; key: SortKey | null }[] = [
 ];
 
 export default function JournalPage() {
+  const { theme } = useTheme();
+  // White-tint hover overlays only read as a highlight against a dark surface — on light mode's
+  // light backgrounds a white tint is effectively invisible, so flip to a dark tint there.
+  const hoverOverlay = theme === "light" ? "0,0,0" : "255,255,255";
   const { data, isLoading, isError, error } = useTrades();
   const { accounts } = useSelectedAccount();
   const [search, setSearch]     = useState("");
@@ -460,17 +470,18 @@ export default function JournalPage() {
     <div className="h-full flex flex-col gap-3 p-4 overflow-hidden">
       {/* Header */}
       <div className="shrink-0">
-        <h1 className="text-base font-bold" style={{ color: "#f0f0f0" }}>Journal</h1>
-        <p className="text-xs mt-0.5" style={{ color: "#4a5d70" }}>
+        <h1 className="text-base font-bold" style={{ color: "var(--color-text-primary)" }}>Journal</h1>
+        <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
           {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
         </p>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 shrink-0">
+      {/* Toolbar — wraps onto multiple lines once it runs out of room, rather than the fixed
+          single non-wrapping row this used to be. */}
+      <div className="flex items-center gap-3 shrink-0 flex-wrap">
         {/* Search */}
-        <div className="relative">
-          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ color: "#4a5d70" }}>
+        <div className="relative w-full sm:w-auto">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ color: "var(--color-text-muted)" }}>
             <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" d="M21 21l-4.35-4.35" />
           </svg>
           <input
@@ -478,26 +489,26 @@ export default function JournalPage() {
             placeholder="Search instrument, session, notes..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-7 pr-3 py-1.5 text-xs rounded-lg outline-none"
-            style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a", color: "#f0f0f0", width: 260 }}
+            className="pl-7 pr-3 py-1.5 text-xs rounded-lg outline-none w-full sm:w-[260px]"
+            style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
           />
         </div>
 
         {/* Filter tabs */}
-        <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}>
+        <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}>
           {(["all", "long", "short", "win", "loss"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className="px-3 py-1 text-xs font-medium rounded-md capitalize"
               style={{
-                backgroundColor: filter === f ? "#1a2d4a" : "transparent",
-                color: filter === f ? "#f0f0f0" : "#4a5d70",
+                backgroundColor: filter === f ? "var(--color-border)" : "transparent",
+                color: filter === f ? "var(--color-text-primary)" : "var(--color-text-muted)",
                 cursor: "pointer",
                 transition: "background-color 0.3s ease, color 0.3s ease",
               }}
-              onMouseEnter={(e) => { if (filter !== f) { const el = e.currentTarget; el.style.backgroundColor = "rgba(255,255,255,0.05)"; el.style.color = "#8899aa"; } }}
-              onMouseLeave={(e) => { if (filter !== f) { const el = e.currentTarget; el.style.backgroundColor = "transparent"; el.style.color = "#4a5d70"; } }}
+              onMouseEnter={(e) => { if (filter !== f) { const el = e.currentTarget; el.style.backgroundColor = `rgba(${hoverOverlay},0.05)`; el.style.color = "var(--color-text-secondary)"; } }}
+              onMouseLeave={(e) => { if (filter !== f) { const el = e.currentTarget; el.style.backgroundColor = "transparent"; el.style.color = "var(--color-text-muted)"; } }}
             >
               {f}
             </button>
@@ -516,20 +527,23 @@ export default function JournalPage() {
         </button>
 
         {/* Summary */}
-        <div className="ml-auto flex items-center gap-4">
-          <span className="text-xs" style={{ color: "#4a5d70" }}>{rows.length} {rows.length === 1 ? "trade" : "trades"}</span>
-          <span className="text-xs" style={{ color: "#4a5d70" }}>{rows.length ? Math.round((wins / rows.length) * 100) : 0}% win rate</span>
-          <span className="text-xs font-semibold" style={{ color: totalPnl >= 0 ? "#a3e05a" : "#f87171" }}>
+        <div className="ml-auto flex items-center gap-3 sm:gap-4 flex-wrap">
+          <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>{rows.length} {rows.length === 1 ? "trade" : "trades"}</span>
+          <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>{rows.length ? Math.round((wins / rows.length) * 100) : 0}% win rate</span>
+          <span className="text-xs font-semibold" style={{ color: totalPnl >= 0 ? "var(--color-green-neon)" : "var(--color-danger)" }}>
             {totalPnl >= 0 ? "+" : ""}${Math.abs(totalPnl).toFixed(2)} total P&L
           </span>
         </div>
       </div>
 
       {/* Table */}
-      <div className="flex-1 rounded-xl overflow-hidden min-h-0" style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}>
-        <div className="overflow-y-auto h-full">
-          <table className="w-full text-xs border-collapse">
-            <thead className="sticky top-0" style={{ backgroundColor: "#0b1220", borderBottom: "1px solid #1a2d4a" }}>
+      <div className="flex-1 rounded-xl overflow-hidden min-h-0" style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}>
+        {/* overflow-x-auto + the table's own min-width: below 900px the table stays 900px wide
+            and this scrolls horizontally instead of cramming 11 columns of trading data
+            unreadably — sticky header is unaffected (it's scoped to the vertical-scroll axis). */}
+        <div className="overflow-y-auto overflow-x-auto h-full">
+          <table className="w-full min-w-[900px] text-xs border-collapse">
+            <thead className="sticky top-0" style={{ backgroundColor: "var(--color-bg-surface)", borderBottom: "1px solid var(--color-border)" }}>
               <tr>
                 {COLS.map(({ label, key }) => (
                   <th
@@ -537,13 +551,13 @@ export default function JournalPage() {
                     onClick={() => handleSort(key)}
                     className="px-4 py-3 text-left font-medium"
                     style={{
-                      color: key && sortKey === key ? "#7bc13b" : "#4a5d70",
+                      color: key && sortKey === key ? "var(--color-green-primary)" : "var(--color-text-muted)",
                       cursor: key ? "pointer" : "default",
                       whiteSpace: "nowrap",
                       transition: "color 0.3s ease",
                     }}
-                    onMouseEnter={(e) => { if (key && sortKey !== key) (e.currentTarget as HTMLTableCellElement).style.color = "#8899aa"; }}
-                    onMouseLeave={(e) => { if (key && sortKey !== key) (e.currentTarget as HTMLTableCellElement).style.color = "#4a5d70"; }}
+                    onMouseEnter={(e) => { if (key && sortKey !== key) (e.currentTarget as HTMLTableCellElement).style.color = "var(--color-text-secondary)"; }}
+                    onMouseLeave={(e) => { if (key && sortKey !== key) (e.currentTarget as HTMLTableCellElement).style.color = "var(--color-text-muted)"; }}
                   >
                     <span className="flex items-center gap-1">
                       {label}
@@ -562,10 +576,10 @@ export default function JournalPage() {
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={11} className="px-4 py-12 text-center text-xs" style={{ color: "#4a5d70" }}>Loading trades...</td></tr>
+                <tr><td colSpan={11} className="px-4 py-12 text-center text-xs" style={{ color: "var(--color-text-muted)" }}>Loading trades...</td></tr>
               )}
               {isError && (
-                <tr><td colSpan={11} className="px-4 py-12 text-center text-xs" style={{ color: "#f87171" }}>
+                <tr><td colSpan={11} className="px-4 py-12 text-center text-xs" style={{ color: "var(--color-danger)" }}>
                   {error instanceof ApiError ? error.message : "Failed to load trades."}
                 </td></tr>
               )}
@@ -578,41 +592,41 @@ export default function JournalPage() {
                       onClick={() => setExpanded(isOpen ? null : t.id)}
                       className="cursor-pointer transition-colors"
                       style={{ borderBottom: "1px solid rgba(26,45,74,0.5)" }}
-                      onMouseEnter={(e) => (e.currentTarget as HTMLTableRowElement).style.backgroundColor = "rgba(255,255,255,0.02)"}
+                      onMouseEnter={(e) => (e.currentTarget as HTMLTableRowElement).style.backgroundColor = `rgba(${hoverOverlay},0.02)`}
                       onMouseLeave={(e) => (e.currentTarget as HTMLTableRowElement).style.backgroundColor = "transparent"}
                     >
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "#8899aa" }}>{t.date}</td>
-                      <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: "#f0f0f0" }}>{t.instrument}</td>
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.date}</td>
+                      <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: "var(--color-text-primary)" }}>{t.instrument}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
                           className="px-2 py-0.5 rounded text-[11px] font-semibold"
                           style={{
                             backgroundColor: t.direction === "Long" ? "rgba(123,193,59,0.15)" : "rgba(239,68,68,0.15)",
-                            color: t.direction === "Long" ? "#a3e05a" : "#f87171",
+                            color: t.direction === "Long" ? "var(--color-green-neon)" : "var(--color-danger)",
                           }}
                         >
                           {t.direction === "Long" ? "▲" : "▼"} {t.direction}
                         </span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "#8899aa" }}>{t.entryPrice}</td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "#8899aa" }}>{t.exitPrice ?? "—"}</td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "#8899aa" }}>{t.lotSize}</td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "#8899aa" }}>{t.duration}</td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "#8899aa" }}>{t.session}</td>
-                      <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: t.pnl === null ? "#4a5d70" : isWin ? "#a3e05a" : "#f87171" }}>
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.entryPrice}</td>
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.exitPrice ?? "—"}</td>
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.lotSize}</td>
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.duration}</td>
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.session}</td>
+                      <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: t.pnl === null ? "var(--color-text-muted)" : isWin ? "var(--color-green-neon)" : "var(--color-danger)" }}>
                         {t.pnl === null ? "open" : `${isWin ? "+" : ""}$${Math.abs(t.pnl).toFixed(2)}`}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: t.fees === null ? "#4a5d70" : t.fees < 0 ? "#f87171" : "#a3e05a" }}>
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: t.fees === null ? "var(--color-text-muted)" : t.fees < 0 ? "var(--color-danger)" : "var(--color-green-neon)" }}>
                         {t.fees === null ? "—" : `${t.fees >= 0 ? "+" : "-"}$${Math.abs(t.fees).toFixed(2)}`}
                       </td>
-                      <td className="px-4 py-3 max-w-[180px] truncate" style={{ color: "#4a5d70" }}>{t.notes || "—"}</td>
+                      <td className="px-4 py-3 max-w-[180px] truncate" style={{ color: "var(--color-text-muted)" }}>{t.notes || "—"}</td>
                     </tr>
                     {isOpen && (
                       <tr style={{ backgroundColor: "rgba(123,193,59,0.03)", borderBottom: "1px solid rgba(26,45,74,0.5)" }}>
                         <td colSpan={11} className="px-6 py-3">
                           <div className="flex items-center justify-between gap-4">
-                            <p className="text-xs" style={{ color: "#8899aa" }}>
-                              <span className="font-semibold" style={{ color: "#f0f0f0" }}>Notes: </span>
+                            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                              <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Notes: </span>
                               {t.notes || "No notes for this trade."}
                             </p>
                             <div className="shrink-0 flex items-center gap-2">
@@ -624,7 +638,7 @@ export default function JournalPage() {
                                   if (full) setEditingTrade(full);
                                 }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-opacity hover:opacity-80"
-                                style={{ backgroundColor: "rgba(123,193,59,0.12)", border: "1px solid rgba(123,193,59,0.3)", color: "#a3e05a" }}
+                                style={{ backgroundColor: "rgba(123,193,59,0.12)", border: "1px solid rgba(123,193,59,0.3)", color: "var(--color-green-neon)" }}
                               >
                                 <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -639,7 +653,7 @@ export default function JournalPage() {
                                   if (full) setDeletingTrade(full);
                                 }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-opacity hover:opacity-80"
-                                style={{ backgroundColor: "rgba(224,82,82,0.1)", border: "1px solid rgba(224,82,82,0.3)", color: "#e05252" }}
+                                style={{ backgroundColor: "rgba(224,82,82,0.1)", border: "1px solid rgba(224,82,82,0.3)", color: "var(--color-danger)" }}
                               >
                                 <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0v13a2 2 0 01-2 2H8a2 2 0 01-2-2V7h12z" />
@@ -656,7 +670,7 @@ export default function JournalPage() {
               })}
               {!isLoading && !isError && rows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-xs" style={{ color: "#4a5d70" }}>
+                  <td colSpan={11} className="px-4 py-12 text-center text-xs" style={{ color: "var(--color-text-muted)" }}>
                     No trades match your filters.
                   </td>
                 </tr>

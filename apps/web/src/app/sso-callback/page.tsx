@@ -4,7 +4,7 @@ export default function SSOCallbackPage() {
   return (
     <div
       className="min-h-screen flex items-center justify-center"
-      style={{ backgroundColor: "#05090f" }}
+      style={{ backgroundColor: "var(--color-bg-base)" }}
     >
       <AuthenticateWithRedirectCallback
         signInFallbackRedirectUrl="/dashboard"

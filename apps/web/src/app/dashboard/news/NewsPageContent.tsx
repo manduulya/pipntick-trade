@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTheme } from "../../../lib/theme-context";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ type SessionDef = {
 const SESSIONS: SessionDef[] = [
   { name: "Sydney",   tz: "Australia/Sydney",  localOpen: 8,  localClose: 17, color: "#60a5fa" },
   { name: "Tokyo",    tz: "Asia/Tokyo",         localOpen: 9,  localClose: 18, color: "#c084fc" },
-  { name: "London",   tz: "Europe/London",      localOpen: 8,  localClose: 17, color: "#7bc13b" },
+  { name: "London",   tz: "Europe/London",      localOpen: 8,  localClose: 17, color: "var(--color-green-primary)" },
   { name: "New York", tz: "America/New_York",   localOpen: 8,  localClose: 17, color: "#fb923c" },
 ];
 
@@ -119,20 +120,20 @@ function SessionsWidget() {
   return (
     <div
       className="rounded-xl p-4 shrink-0"
-      style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}
+      style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold" style={{ color: "#f0f0f0" }}>Trading Sessions</h2>
-          <span className="text-xs px-2 py-0.5 rounded-md font-mono" style={{ backgroundColor: "#07101e", color: "#4a5d70", border: "1px solid #1a2d4a" }}>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>Trading Sessions</h2>
+          <span className="text-xs px-2 py-0.5 rounded-md font-mono" style={{ backgroundColor: "#07101e", color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}>
             {localLabel} {localTZ}
           </span>
         </div>
         {/* Active session badges */}
         <div className="flex items-center gap-2">
           {activeSessions.length === 0 ? (
-            <span className="text-xs" style={{ color: "#4a5d70" }}>No active sessions</span>
+            <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>No active sessions</span>
           ) : (
             activeSessions.map((s) => (
               <span
@@ -161,7 +162,7 @@ function SessionsWidget() {
             <span
               key={h}
               className="absolute text-[10px] -translate-x-1/2"
-              style={{ left: `${(h / 24) * 100}%`, color: "#2a3d50" }}
+              style={{ left: `${(h / 24) * 100}%`, color: "var(--color-text-disabled)" }}
             >
               {h === 0 || h === 24 ? "12am" : h < 12 ? `${h}am` : h === 12 ? "12pm" : `${h - 12}pm`}
             </span>
@@ -199,7 +200,7 @@ function SessionsWidget() {
                     {i === 0 && (
                       <span
                         className="px-2 text-xs font-semibold whitespace-nowrap"
-                        style={{ color: active ? "#05090f" : `${s.color}99` }}
+                        style={{ color: active ? "var(--color-bg-base)" : `${s.color}99` }}
                       >
                         {s.name}
                         <span className="ml-2 font-normal">{localTime(s.tz, now)}</span>
@@ -217,7 +218,7 @@ function SessionsWidget() {
             style={{
               left: `${nowPct}%`,
               width: 2,
-              backgroundColor: "#7bc13b",
+              backgroundColor: "var(--color-green-primary)",
               boxShadow: "0 0 6px rgba(123,193,59,0.6)",
               zIndex: 10,
             }}
@@ -336,7 +337,7 @@ const newsArticles: NewsArticle[] = [
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const IMPACT_COLOR: Record<Impact, string> = {
-  high:   "#ef4444",
+  high:   "var(--color-danger)",
   medium: "#f59e0b",
   low:    "#eab308",
 };
@@ -348,11 +349,11 @@ const IMPACT_BG: Record<Impact, string> = {
 };
 
 const CATEGORY_COLOR: Record<NewsArticle["category"], string> = {
-  forex:       "#7bc13b",
+  forex:       "var(--color-green-primary)",
   stocks:      "#60a5fa",
   commodities: "#f59e0b",
   crypto:      "#a78bfa",
-  macro:       "#f87171",
+  macro:       "var(--color-danger)",
 };
 
 function isBeat(actual: string | null, forecast: string | null): boolean | null {
@@ -411,9 +412,9 @@ function ImpactBadge({ impact }: { impact: Impact }) {
 }
 
 function ActualValue({ actual, forecast }: { actual: string | null; forecast: string | null }) {
-  if (!actual) return <span style={{ color: "#4a5d70" }}>—</span>;
+  if (!actual) return <span style={{ color: "var(--color-text-muted)" }}>—</span>;
   const beat = isBeat(actual, forecast);
-  const color = beat === null ? "#f0f0f0" : beat ? "#7bc13b" : "#ef4444";
+  const color = beat === null ? "var(--color-text-primary)" : beat ? "var(--color-green-primary)" : "var(--color-danger)";
   return (
     <span className="font-semibold" style={{ color }}>
       {actual}
@@ -427,6 +428,10 @@ function ActualValue({ actual, forecast }: { actual: string | null; forecast: st
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function NewsPage() {
+  const { theme } = useTheme();
+  // White-tint hover/default overlays only read as a highlight against a dark surface — flip to
+  // a dark tint in light mode, where they'd otherwise be invisible.
+  const hoverOverlay = theme === "light" ? "0,0,0" : "255,255,255";
   const [tab, setTab] = useState<Tab>("calendar");
   const [impactFilter, setImpactFilter] = useState<ImpactFilter>("all");
   const [currencyFilter, setCurrencyFilter] = useState("All");
@@ -457,8 +462,8 @@ export default function NewsPage() {
       {/* Header */}
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-base font-bold" style={{ color: "#f0f0f0" }}>Market News</h1>
-          <p className="text-xs mt-0.5" style={{ color: "#4a5d70" }}>
+          <h1 className="text-base font-bold" style={{ color: "var(--color-text-primary)" }}>Market News</h1>
+          <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
             Economic calendar & financial news
           </p>
         </div>
@@ -466,7 +471,7 @@ export default function NewsPage() {
         {/* Tab switcher */}
         <div
           className="flex items-center gap-1 p-1 rounded-xl"
-          style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}
+          style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
         >
           {(["calendar", "news"] as Tab[]).map((t) => (
             <button
@@ -474,8 +479,8 @@ export default function NewsPage() {
               onClick={() => setTab(t)}
               className="px-5 py-1.5 text-sm font-semibold rounded-lg capitalize cursor-pointer"
               style={{
-                backgroundColor: tab === t ? "#7bc13b" : "transparent",
-                color:           tab === t ? "#05090f" : "#8899aa",
+                backgroundColor: tab === t ? "var(--color-green-primary)" : "transparent",
+                color:           tab === t ? "var(--color-bg-base)" : "var(--color-text-secondary)",
                 transition:      "background-color 0.3s, color 0.3s",
               }}
               onMouseEnter={(e) => {
@@ -489,7 +494,7 @@ export default function NewsPage() {
                 if (tab !== t) {
                   const el = e.currentTarget as HTMLButtonElement;
                   el.style.backgroundColor = "transparent";
-                  el.style.color = "#8899aa";
+                  el.style.color = "var(--color-text-secondary)";
                 }
               }}
             >
@@ -511,28 +516,28 @@ export default function NewsPage() {
             {/* Date navigation */}
             <div
               className="flex items-center gap-2 px-3 py-2 rounded-xl"
-              style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}
+              style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
             >
               <button
                 onClick={() => setDateOffset((d) => d - 1)}
                 className="w-6 h-6 flex items-center justify-center rounded-lg cursor-pointer"
-                style={{ color: "#8899aa", transition: "color 0.2s" }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#f0f0f0")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#8899aa")}
+                style={{ color: "var(--color-text-secondary)", transition: "color 0.2s" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-secondary)")}
               >
                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-              <span className="text-sm font-semibold min-w-[180px] text-center" style={{ color: isToday ? "#7bc13b" : "#f0f0f0" }}>
+              <span className="text-sm font-semibold min-w-[180px] text-center" style={{ color: isToday ? "var(--color-green-primary)" : "var(--color-text-primary)" }}>
                 {isToday ? `Today — ${dateLabel}` : dateLabel}
               </span>
               <button
                 onClick={() => setDateOffset((d) => d + 1)}
                 className="w-6 h-6 flex items-center justify-center rounded-lg cursor-pointer"
-                style={{ color: "#8899aa", transition: "color 0.2s" }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#f0f0f0")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#8899aa")}
+                style={{ color: "var(--color-text-secondary)", transition: "color 0.2s" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-secondary)")}
               >
                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -542,7 +547,7 @@ export default function NewsPage() {
                 <button
                   onClick={() => setDateOffset(0)}
                   className="ml-1 px-2 py-0.5 rounded-md text-xs font-medium cursor-pointer"
-                  style={{ backgroundColor: "rgba(123,193,59,0.15)", color: "#7bc13b", border: "1px solid rgba(123,193,59,0.3)" }}
+                  style={{ backgroundColor: "rgba(123,193,59,0.15)", color: "var(--color-green-primary)", border: "1px solid rgba(123,193,59,0.3)" }}
                 >
                   Today
                 </button>
@@ -552,11 +557,11 @@ export default function NewsPage() {
             {/* Impact filter */}
             <div
               className="flex items-center gap-1 p-1 rounded-xl"
-              style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}
+              style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
             >
               {(["all", "high", "medium", "low"] as ImpactFilter[]).map((f) => {
                 const active = impactFilter === f;
-                const color  = f === "all" ? "#7bc13b" : IMPACT_COLOR[f as Impact];
+                const color  = f === "all" ? "var(--color-green-primary)" : IMPACT_COLOR[f as Impact];
                 return (
                   <button
                     key={f}
@@ -564,21 +569,21 @@ export default function NewsPage() {
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold capitalize cursor-pointer"
                     style={{
                       backgroundColor: active ? (f === "all" ? "rgba(123,193,59,0.12)" : IMPACT_BG[f as Impact]) : "transparent",
-                      color:           active ? color : "#8899aa",
+                      color:           active ? color : "var(--color-text-secondary)",
                       border:          active ? `1px solid ${color}40` : "1px solid transparent",
                       transition:      "all 0.2s",
                     }}
                     onMouseEnter={(e) => {
                       if (!active) {
                         const el = e.currentTarget as HTMLButtonElement;
-                        el.style.color = "#f0f0f0";
-                        el.style.backgroundColor = "rgba(255,255,255,0.04)";
+                        el.style.color = "var(--color-text-primary)";
+                        el.style.backgroundColor = `rgba(${hoverOverlay},0.04)`;
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!active) {
                         const el = e.currentTarget as HTMLButtonElement;
-                        el.style.color = "#8899aa";
+                        el.style.color = "var(--color-text-secondary)";
                         el.style.backgroundColor = "transparent";
                       }
                     }}
@@ -605,23 +610,23 @@ export default function NewsPage() {
                     onClick={() => setCurrencyFilter(c)}
                     className="px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer"
                     style={{
-                      backgroundColor: active ? "rgba(123,193,59,0.12)" : "#0b1220",
-                      color:           active ? "#7bc13b" : "#4a5d70",
-                      border:          active ? "1px solid rgba(123,193,59,0.3)" : "1px solid #1a2d4a",
+                      backgroundColor: active ? "rgba(123,193,59,0.12)" : "var(--color-bg-surface)",
+                      color:           active ? "var(--color-green-primary)" : "var(--color-text-muted)",
+                      border:          active ? "1px solid rgba(123,193,59,0.3)" : "1px solid var(--color-border)",
                       transition:      "all 0.2s",
                     }}
                     onMouseEnter={(e) => {
                       if (!active) {
                         const el = e.currentTarget as HTMLButtonElement;
-                        el.style.color = "#8899aa";
-                        el.style.backgroundColor = "rgba(255,255,255,0.04)";
+                        el.style.color = "var(--color-text-secondary)";
+                        el.style.backgroundColor = `rgba(${hoverOverlay},0.04)`;
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!active) {
                         const el = e.currentTarget as HTMLButtonElement;
-                        el.style.color = "#4a5d70";
-                        el.style.backgroundColor = "#0b1220";
+                        el.style.color = "var(--color-text-muted)";
+                        el.style.backgroundColor = "var(--color-bg-surface)";
                       }
                     }}
                   >
@@ -633,12 +638,12 @@ export default function NewsPage() {
           </div>
 
           {/* Stats summary */}
-          <div className="grid grid-cols-3 gap-3 shrink-0">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
             {[
               {
                 label: "High Impact",
                 value: filteredEvents.filter((e) => e.impact === "high").length,
-                color: "#ef4444",
+                color: "var(--color-danger)",
                 bg: "rgba(239,68,68,0.08)",
                 border: "rgba(239,68,68,0.2)",
               },
@@ -664,7 +669,7 @@ export default function NewsPage() {
               >
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                 <div>
-                  <p className="text-xs" style={{ color: "#8899aa" }}>{s.label}</p>
+                  <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{s.label}</p>
                   <p className="text-xl font-bold leading-tight" style={{ color: s.color }}>{s.value}</p>
                 </div>
               </div>
@@ -674,16 +679,21 @@ export default function NewsPage() {
           {/* Calendar table */}
           <div
             className="rounded-xl overflow-hidden flex-1"
-            style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a", minHeight: 0 }}
+            style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", minHeight: 0 }}
           >
+            {/* overflow-x-auto + a shared min-width wrapper — the header and rows both use the
+                same gridTemplateColumns and need to scroll together in lockstep, which sharing
+                one min-width ancestor guarantees. */}
+            <div className="overflow-x-auto">
+            <div className="min-w-[700px]">
             {/* Table header */}
             <div
               className="grid text-xs font-semibold px-4 py-2.5 sticky top-0"
               style={{
                 gridTemplateColumns: "90px 70px 110px 1fr 90px 90px 90px",
                 backgroundColor: "#07101e",
-                borderBottom: "1px solid #1a2d4a",
-                color: "#4a5d70",
+                borderBottom: "1px solid var(--color-border)",
+                color: "var(--color-text-muted)",
               }}
             >
               <span>Time</span>
@@ -699,7 +709,7 @@ export default function NewsPage() {
             <div>
               {filteredEvents.length === 0 ? (
                 <div className="flex items-center justify-center py-16">
-                  <p className="text-sm" style={{ color: "#4a5d70" }}>No events match your filters.</p>
+                  <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>No events match your filters.</p>
                 </div>
               ) : (
                 filteredEvents.map((event) => {
@@ -719,7 +729,7 @@ export default function NewsPage() {
                         transition: "background-color 0.2s",
                       }}
                       onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLDivElement).style.backgroundColor = "rgba(255,255,255,0.02)";
+                        (e.currentTarget as HTMLDivElement).style.backgroundColor = `rgba(${hoverOverlay},0.02)`;
                       }}
                       onMouseLeave={(e) => {
                         (e.currentTarget as HTMLDivElement).style.backgroundColor = upNext ? "rgba(123,193,59,0.04)" : "transparent";
@@ -730,12 +740,12 @@ export default function NewsPage() {
                         {upNext && (
                           <span
                             className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                            style={{ backgroundColor: "#7bc13b" }}
+                            style={{ backgroundColor: "var(--color-green-primary)" }}
                           />
                         )}
                         <span
                           className="text-xs font-medium"
-                          style={{ color: showTime ? (upNext ? "#7bc13b" : "#8899aa") : "transparent" }}
+                          style={{ color: showTime ? (upNext ? "var(--color-green-primary)" : "var(--color-text-secondary)") : "transparent" }}
                         >
                           {event.time}
                         </span>
@@ -744,7 +754,7 @@ export default function NewsPage() {
                       {/* Currency */}
                       <span
                         className="text-xs font-bold"
-                        style={{ color: "#f0f0f0" }}
+                        style={{ color: "var(--color-text-primary)" }}
                       >
                         {event.currency}
                       </span>
@@ -755,7 +765,7 @@ export default function NewsPage() {
                       {/* Event name */}
                       <span
                         className="text-xs pr-4"
-                        style={{ color: past ? "#8899aa" : "#d4e4f0" }}
+                        style={{ color: past ? "var(--color-text-secondary)" : "#d4e4f0" }}
                       >
                         {event.event}
                       </span>
@@ -766,12 +776,12 @@ export default function NewsPage() {
                       </div>
 
                       {/* Forecast */}
-                      <span className="text-xs text-right" style={{ color: "#4a5d70" }}>
+                      <span className="text-xs text-right" style={{ color: "var(--color-text-muted)" }}>
                         {event.forecast ?? "—"}
                       </span>
 
                       {/* Previous */}
-                      <span className="text-xs text-right" style={{ color: "#4a5d70" }}>
+                      <span className="text-xs text-right" style={{ color: "var(--color-text-muted)" }}>
                         {event.previous ?? "—"}
                       </span>
                     </div>
@@ -779,10 +789,12 @@ export default function NewsPage() {
                 })
               )}
             </div>
+            </div>
+            </div>
           </div>
 
           {/* API notice */}
-          <p className="text-[11px] shrink-0" style={{ color: "#2a3d50" }}>
+          <p className="text-[11px] shrink-0" style={{ color: "var(--color-text-disabled)" }}>
             Data source: Finnhub Economic Calendar API (finnhub.io) — Add your free API key to enable live data.
           </p>
         </>
@@ -795,15 +807,15 @@ export default function NewsPage() {
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {(["all", "forex", "stocks", "commodities", "crypto", "macro"] as const).map((cat) => {
               const isAll = cat === "all";
-              const color = isAll ? "#7bc13b" : CATEGORY_COLOR[cat as NewsArticle["category"]];
+              const color = isAll ? "var(--color-green-primary)" : CATEGORY_COLOR[cat as NewsArticle["category"]];
               return (
                 <button
                   key={cat}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold capitalize cursor-pointer"
                   style={{
-                    backgroundColor: isAll ? "rgba(123,193,59,0.12)" : "rgba(255,255,255,0.04)",
-                    color:           isAll ? color : "#8899aa",
-                    border:          isAll ? "1px solid rgba(123,193,59,0.3)" : "1px solid #1a2d4a",
+                    backgroundColor: isAll ? "rgba(123,193,59,0.12)" : `rgba(${hoverOverlay},0.04)`,
+                    color:           isAll ? color : "var(--color-text-secondary)",
+                    border:          isAll ? "1px solid rgba(123,193,59,0.3)" : "1px solid var(--color-border)",
                     transition:      "all 0.2s",
                   }}
                   onMouseEnter={(e) => {
@@ -815,13 +827,13 @@ export default function NewsPage() {
                   onMouseLeave={(e) => {
                     const el = e.currentTarget as HTMLButtonElement;
                     if (cat === "all") {
-                      el.style.color = "#7bc13b";
+                      el.style.color = "var(--color-green-primary)";
                       el.style.backgroundColor = "rgba(123,193,59,0.12)";
                       el.style.borderColor = "rgba(123,193,59,0.3)";
                     } else {
-                      el.style.color = "#8899aa";
-                      el.style.backgroundColor = "rgba(255,255,255,0.04)";
-                      el.style.borderColor = "#1a2d4a";
+                      el.style.color = "var(--color-text-secondary)";
+                      el.style.backgroundColor = `rgba(${hoverOverlay},0.04)`;
+                      el.style.borderColor = "var(--color-border)";
                     }
                   }}
                 >
@@ -832,7 +844,7 @@ export default function NewsPage() {
           </div>
 
           {/* News grid */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {newsArticles.map((article) => {
               const catColor = CATEGORY_COLOR[article.category];
               return (
@@ -840,19 +852,19 @@ export default function NewsPage() {
                   key={article.id}
                   className="rounded-xl p-4 flex flex-col gap-2 cursor-pointer"
                   style={{
-                    backgroundColor: "#0b1220",
-                    border: "1px solid #1a2d4a",
+                    backgroundColor: "var(--color-bg-surface)",
+                    border: "1px solid var(--color-border)",
                     transition: "border-color 0.2s, background-color 0.2s",
                   }}
                   onMouseEnter={(e) => {
                     const el = e.currentTarget as HTMLDivElement;
-                    el.style.borderColor = "#2a4060";
-                    el.style.backgroundColor = "#0f1a2e";
+                    el.style.borderColor = "var(--color-border-hover)";
+                    el.style.backgroundColor = "var(--color-bg-card)";
                   }}
                   onMouseLeave={(e) => {
                     const el = e.currentTarget as HTMLDivElement;
-                    el.style.borderColor = "#1a2d4a";
-                    el.style.backgroundColor = "#0b1220";
+                    el.style.borderColor = "var(--color-border)";
+                    el.style.backgroundColor = "var(--color-bg-surface)";
                   }}
                 >
                   {/* Category + time */}
@@ -867,13 +879,13 @@ export default function NewsPage() {
                     >
                       {article.category}
                     </span>
-                    <span className="text-[11px]" style={{ color: "#4a5d70" }}>
+                    <span className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
                       {article.publishedAt}
                     </span>
                   </div>
 
                   {/* Title */}
-                  <h3 className="text-sm font-semibold leading-snug" style={{ color: "#f0f0f0" }}>
+                  <h3 className="text-sm font-semibold leading-snug" style={{ color: "var(--color-text-primary)" }}>
                     {article.title}
                   </h3>
 
@@ -884,12 +896,12 @@ export default function NewsPage() {
 
                   {/* Footer */}
                   <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs font-medium" style={{ color: "#4a5d70" }}>
+                    <span className="text-xs font-medium" style={{ color: "var(--color-text-muted)" }}>
                       {article.source}
                     </span>
                     <span
                       className="text-xs font-medium flex items-center gap-1"
-                      style={{ color: "#7bc13b" }}
+                      style={{ color: "var(--color-green-primary)" }}
                     >
                       Read more
                       <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -903,7 +915,7 @@ export default function NewsPage() {
           </div>
 
           {/* API notice */}
-          <p className="text-[11px] shrink-0" style={{ color: "#2a3d50" }}>
+          <p className="text-[11px] shrink-0" style={{ color: "var(--color-text-disabled)" }}>
             Data source: Alpha Vantage News Sentiment API — Add your free API key to enable live headlines.
           </p>
         </>

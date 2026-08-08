@@ -22,11 +22,13 @@ installed yet.
 
 ## 1. Database
 - [ ] Provision a Postgres service on Railway (in a **new** project, separate from the minemaster one).
-- [ ] Run `pnpm db:generate` from `packages/db/` to produce the first real migration —
-      `packages/db/migrations/` doesn't exist yet; only `db:push` has ever been used, against the
-      local Docker DB.
+- [x] Run `pnpm db:generate` from `packages/db/` to produce the first real migration —
+      `packages/db/migrations/0000_clumsy_komodo.sql` now exists (3 tables: `users`,
+      `trading_accounts`, `trades`, matching enums and FKs — generated purely from schema
+      introspection, no live DB connection needed for `generate` itself).
 - [ ] Run `pnpm db:migrate` against the Railway Postgres to apply it. Use `db:migrate` as the
-      production sync path going forward, not `db:push`.
+      production sync path going forward, not `db:push`. **Needs the Railway `DATABASE_URL`
+      first** (previous checklist item) — can't run until that service exists.
 
 ## 2. Auth (Clerk)
 - [ ] Shippable as-is with current test-mode keys (`pk_test_`/`sk_test_`) — not a blocker for

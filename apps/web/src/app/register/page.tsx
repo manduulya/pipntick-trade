@@ -31,7 +31,7 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 const STRENGTH_LABELS = ["Very weak", "Weak", "Fair", "Strong", "Very strong"];
-const STRENGTH_COLORS = ["#e05252", "#e0824f", "#e0c14f", "#7bc13b", "#4fae5c"];
+const STRENGTH_COLORS = ["var(--color-danger)", "#e0824f", "#e0c14f", "var(--color-green-primary)", "#4fae5c"];
 
 function PasswordStrengthMeter({ password }: { password: string }) {
   const result = useMemo(() => (password ? zxcvbnEngine.check(password) : null), [password]);
@@ -48,11 +48,11 @@ function PasswordStrengthMeter({ password }: { password: string }) {
           <div
             key={i}
             className="h-1 flex-1 rounded-full"
-            style={{ backgroundColor: i <= score ? STRENGTH_COLORS[score] : "#1a2d4a" }}
+            style={{ backgroundColor: i <= score ? STRENGTH_COLORS[score] : "var(--color-border)" }}
           />
         ))}
       </div>
-      <p className="text-[11px]" style={{ color: meetsMinimum ? "#7bc13b" : "#8899aa" }}>
+      <p className="text-[11px]" style={{ color: meetsMinimum ? "var(--color-green-primary)" : "var(--color-text-secondary)" }}>
         {STRENGTH_LABELS[score]}
         {!meetsMinimum && " — needs to be a bit stronger"}
       </p>
@@ -60,7 +60,7 @@ function PasswordStrengthMeter({ password }: { password: string }) {
         <p className="text-[11px]" style={{ color: "#e0824f" }}>{result.feedback.warning}</p>
       )}
       {result?.feedback.suggestions.map((suggestion) => (
-        <p key={suggestion} className="text-[11px]" style={{ color: "#4a5d70" }}>{suggestion}</p>
+        <p key={suggestion} className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>{suggestion}</p>
       ))}
     </div>
   );
@@ -82,7 +82,7 @@ function PasswordInput({
   const [visible, setVisible] = useState(false);
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-medium" style={{ color: "#8899aa" }}>
+      <label className="text-xs font-medium" style={{ color: "var(--color-text-secondary)" }}>
         {label}
       </label>
       <div className="relative">
@@ -95,9 +95,9 @@ function PasswordInput({
           minLength={minLength}
           className="w-full rounded-md px-3 py-2.5 pr-10 text-sm outline-none transition-colors"
           style={{
-            backgroundColor: "#05090f",
-            border: "1px solid #1a2d4a",
-            color: "#f0f0f0",
+            backgroundColor: "var(--color-bg-base)",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text-primary)",
           }}
         />
         <button
@@ -106,7 +106,7 @@ function PasswordInput({
           onClick={() => setVisible((v) => !v)}
           aria-label={visible ? "Hide password" : "Show password"}
           className="absolute right-0 top-0 h-full px-3 flex items-center"
-          style={{ color: "#4a5d70" }}
+          style={{ color: "var(--color-text-muted)" }}
         >
           {visible ? (
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
@@ -136,12 +136,12 @@ export default function RegisterPage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState<"google" | "facebook" | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<"google" | null>(null);
 
-  async function handleOAuth(strategy: "oauth_google" | "oauth_facebook") {
+  async function handleOAuth(strategy: "oauth_google") {
     if (!isLoaded) return;
     setError(null);
-    setOauthLoading(strategy === "oauth_google" ? "google" : "facebook");
+    setOauthLoading("google");
     try {
       await signUp.authenticateWithRedirect({
         strategy,
@@ -204,12 +204,12 @@ export default function RegisterPage() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-4"
-      style={{ backgroundColor: "#05090f", color: "#f0f0f0" }}
+      style={{ backgroundColor: "var(--color-bg-base)", color: "var(--color-text-primary)" }}
     >
       {/* Card */}
       <div
         className="w-full max-w-sm rounded-xl px-8 py-5"
-        style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a" }}
+        style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
       >
         {/* Logo */}
         <Link href="/" className="flex justify-center mb-2">
@@ -219,14 +219,14 @@ export default function RegisterPage() {
         {stage === "details" ? (
           <>
             <h1 className="text-2xl font-bold tracking-tight mb-1">Create your account</h1>
-            <p className="text-sm mb-8" style={{ color: "#8899aa" }}>
+            <p className="text-sm mb-8" style={{ color: "var(--color-text-secondary)" }}>
               Start tracking your trades today.
             </p>
 
             <form className="flex flex-col gap-4" onSubmit={handleDetailsSubmit}>
               {/* Full name */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium" style={{ color: "#8899aa" }}>
+                <label className="text-xs font-medium" style={{ color: "var(--color-text-secondary)" }}>
                   Full name
                 </label>
                 <input
@@ -237,16 +237,16 @@ export default function RegisterPage() {
                   required
                   className="w-full rounded-md px-3 py-2.5 text-sm outline-none transition-colors"
                   style={{
-                    backgroundColor: "#05090f",
-                    border: "1px solid #1a2d4a",
-                    color: "#f0f0f0",
+                    backgroundColor: "var(--color-bg-base)",
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text-primary)",
                   }}
                 />
               </div>
 
               {/* Email */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium" style={{ color: "#8899aa" }}>
+                <label className="text-xs font-medium" style={{ color: "var(--color-text-secondary)" }}>
                   Email
                 </label>
                 <input
@@ -257,9 +257,9 @@ export default function RegisterPage() {
                   required
                   className="w-full rounded-md px-3 py-2.5 text-sm outline-none transition-colors"
                   style={{
-                    backgroundColor: "#05090f",
-                    border: "1px solid #1a2d4a",
-                    color: "#f0f0f0",
+                    backgroundColor: "var(--color-bg-base)",
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text-primary)",
                   }}
                 />
               </div>
@@ -286,7 +286,7 @@ export default function RegisterPage() {
               />
 
               {error && (
-                <p className="text-xs" style={{ color: "#e05252" }}>
+                <p className="text-xs" style={{ color: "var(--color-danger)" }}>
                   {error}
                 </p>
               )}
@@ -307,9 +307,9 @@ export default function RegisterPage() {
 
             {/* Divider */}
             <div className="flex items-center gap-3 my-6">
-              <div className="flex-1 h-px" style={{ backgroundColor: "#1a2d4a" }} />
-              <span className="text-xs" style={{ color: "#4a5d70" }}>or continue with</span>
-              <div className="flex-1 h-px" style={{ backgroundColor: "#1a2d4a" }} />
+              <div className="flex-1 h-px" style={{ backgroundColor: "var(--color-border)" }} />
+              <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>or continue with</span>
+              <div className="flex-1 h-px" style={{ backgroundColor: "var(--color-border)" }} />
             </div>
 
             {/* Social */}
@@ -328,24 +328,12 @@ export default function RegisterPage() {
                 </svg>
                 {oauthLoading === "google" ? "Redirecting..." : "Continue with Google"}
               </button>
-
-              <button
-                type="button"
-                onClick={() => handleOAuth("oauth_facebook")}
-                disabled={!isLoaded || oauthLoading !== null}
-                className="ghost-btn w-full flex items-center justify-center gap-2 rounded-md py-2.5 text-sm font-medium disabled:opacity-60"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.234 2.686.234v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" fill="#1877F2"/>
-                </svg>
-                {oauthLoading === "facebook" ? "Redirecting..." : "Continue with Facebook"}
-              </button>
             </div>
 
             {/* Login link */}
-            <p className="text-center text-sm mt-6" style={{ color: "#8899aa" }}>
+            <p className="text-center text-sm mt-6" style={{ color: "var(--color-text-secondary)" }}>
               Already have an account?{" "}
-              <Link href="/login" className="font-medium" style={{ color: "#7bc13b" }}>
+              <Link href="/login" className="font-medium" style={{ color: "var(--color-green-primary)" }}>
                 Log in
               </Link>
             </p>
@@ -353,13 +341,13 @@ export default function RegisterPage() {
         ) : (
           <>
             <h1 className="text-2xl font-bold tracking-tight mb-1">Check your email</h1>
-            <p className="text-sm mb-8" style={{ color: "#8899aa" }}>
+            <p className="text-sm mb-8" style={{ color: "var(--color-text-secondary)" }}>
               We sent a verification code to {email}.
             </p>
 
             <form className="flex flex-col gap-4" onSubmit={handleVerifySubmit}>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium" style={{ color: "#8899aa" }}>
+                <label className="text-xs font-medium" style={{ color: "var(--color-text-secondary)" }}>
                   Verification code
                 </label>
                 <input
@@ -371,15 +359,15 @@ export default function RegisterPage() {
                   required
                   className="w-full rounded-md px-3 py-2.5 text-sm outline-none transition-colors"
                   style={{
-                    backgroundColor: "#05090f",
-                    border: "1px solid #1a2d4a",
-                    color: "#f0f0f0",
+                    backgroundColor: "var(--color-bg-base)",
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text-primary)",
                   }}
                 />
               </div>
 
               {error && (
-                <p className="text-xs" style={{ color: "#e05252" }}>
+                <p className="text-xs" style={{ color: "var(--color-danger)" }}>
                   {error}
                 </p>
               )}
@@ -397,7 +385,7 @@ export default function RegisterPage() {
       </div>
 
       {/* Footer */}
-      <p className="text-xs mt-8" style={{ color: "#4a5d70" }}>
+      <p className="text-xs mt-8" style={{ color: "var(--color-text-muted)" }}>
         © 2026 pipntick.trade
       </p>
     </div>

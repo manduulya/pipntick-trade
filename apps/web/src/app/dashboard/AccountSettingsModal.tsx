@@ -7,9 +7,9 @@ import { ApiError } from "../../lib/api";
 import DeleteTradingAccountModal from "./DeleteTradingAccountModal";
 
 const inputStyle: React.CSSProperties = {
-  backgroundColor: "#05090f",
-  border: "1px solid #1a2d4a",
-  color: "#f0f0f0",
+  backgroundColor: "var(--color-bg-base)",
+  border: "1px solid var(--color-border)",
+  color: "var(--color-text-primary)",
   borderRadius: 6,
   fontSize: 12,
   padding: "7px 10px",
@@ -99,7 +99,7 @@ export default function AccountSettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{
         backgroundColor: visible ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0)",
         backdropFilter: visible ? "blur(4px)" : "blur(0px)",
@@ -110,70 +110,70 @@ export default function AccountSettingsModal({
       <div
         className="w-full max-w-md rounded-2xl overflow-hidden flex flex-col"
         style={{
-          backgroundColor: "#0b1220",
-          border: "1px solid #1a2d4a",
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
           maxHeight: "90vh",
           opacity: visible ? 1 : 0,
           transform: visible ? "translateY(0) scale(1)" : "translateY(16px) scale(0.97)",
           transition: "opacity 0.3s ease, transform 0.3s ease",
         }}
       >
-        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: "1px solid #1a2d4a" }}>
-          <h2 className="text-sm font-bold" style={{ color: "#f0f0f0" }}>Account Settings</h2>
-          <button onClick={handleClose} className="hover:opacity-60 transition-opacity" style={{ color: "#4a5d70" }}>
+        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: "1px solid var(--color-border)" }}>
+          <h2 className="text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>Account Settings</h2>
+          <button onClick={handleClose} className="hover:opacity-60 transition-opacity" style={{ color: "var(--color-text-muted)" }}>
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 px-5 py-4 overflow-y-auto">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px]" style={{ color: "#4a5d70" }}>Account Name</label>
+            <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Account Name</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px]" style={{ color: "#4a5d70" }}>Broker</label>
+            <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Broker</label>
             <input type="text" placeholder="(optional)" value={broker} onChange={(e) => setBroker(e.target.value)} style={inputStyle} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-[10px]" style={{ color: "#4a5d70" }}>Currency</label>
+              <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Currency</label>
               <input type="text" value={currency} onChange={(e) => setCurrency(e.target.value)} style={inputStyle} />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px]" style={{ color: "#4a5d70" }}>Starting Balance</label>
+              <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Starting Balance</label>
               <input type="number" step="any" value={startingBalance} onChange={(e) => setStartingBalance(e.target.value)} style={inputStyle} />
             </div>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px]" style={{ color: "#4a5d70" }}>Account Created Date</label>
+            <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Account Created Date</label>
             <input type="date" max={today} value={createdAt} onChange={(e) => setCreatedAt(e.target.value)} style={inputStyle} />
             {earliestTradeDate && (
-              <p className="text-[10px] mt-0.5" style={{ color: "#4a5d70" }}>
+              <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
                 Earliest trade on record: {earliestTradeDate} — created date can&apos;t be set after this.
               </p>
             )}
           </div>
 
           {formError && (
-            <p className="text-[11px]" style={{ color: "#e05252" }}>{formError}</p>
+            <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>{formError}</p>
           )}
 
           <button
             type="submit"
             disabled={updateAccount.isPending || tradesLoading}
             className="mt-2 rounded-lg text-xs font-semibold py-2.5 transition-opacity"
-            style={{ backgroundColor: "#7bc13b", color: "#05090f", opacity: updateAccount.isPending || tradesLoading ? 0.6 : 1 }}
+            style={{ backgroundColor: "var(--color-green-primary)", color: "var(--color-bg-base)", opacity: updateAccount.isPending || tradesLoading ? 0.6 : 1 }}
           >
             {updateAccount.isPending ? "Saving..." : tradesLoading ? "Loading..." : "Save Changes"}
           </button>
 
-          <div className="mt-2 pt-3" style={{ borderTop: "1px solid #1a2d4a" }}>
-            <p className="text-[10px] mb-2" style={{ color: "#4a5d70" }}>Danger Zone</p>
+          <div className="mt-2 pt-3" style={{ borderTop: "1px solid var(--color-border)" }}>
+            <p className="text-[10px] mb-2" style={{ color: "var(--color-text-muted)" }}>Danger Zone</p>
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
               className="w-full rounded-lg text-xs font-semibold py-2.5"
-              style={{ backgroundColor: "transparent", border: "1px solid #e05252", color: "#e05252" }}
+              style={{ backgroundColor: "transparent", border: "1px solid var(--color-danger)", color: "var(--color-danger)" }}
             >
               Delete This Account
             </button>

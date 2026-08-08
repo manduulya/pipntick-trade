@@ -91,14 +91,18 @@ export default function QuoteBar() {
         }}
       />
 
+      {/* No truncation anywhere. Below lg it wraps within its full-width row (there's no room to
+          go single-line without overflowing a phone). At lg+ it's a floating, uncapped-width
+          corner element (see its wrapper in dashboard/layout.tsx) with room to grow leftward, so
+          it stays on one line instead of wrapping. */}
       <p
-        className="text-xs"
-        style={{ color: "#8899aa", fontStyle: "italic", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+        className="text-base lg:whitespace-nowrap"
+        style={{ color: "var(--color-text-secondary)", fontStyle: "italic" }}
       >
-        <span style={{ color: "#a3e05a" }}>"</span>
+        <span style={{ color: "var(--color-green-neon)" }}>"</span>
         {quote.content}
-        <span style={{ color: "#a3e05a" }}>"</span>
-        <span className="ml-2 not-italic font-medium" style={{ color: "#4a5d70" }}>
+        <span style={{ color: "var(--color-green-neon)" }}>"</span>
+        <span className="ml-2 not-italic font-medium" style={{ color: "var(--color-text-muted)" }}>
           — {quote.author}
         </span>
       </p>

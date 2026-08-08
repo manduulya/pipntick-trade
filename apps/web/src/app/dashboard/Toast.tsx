@@ -13,7 +13,7 @@ export default function Toast({ message, onDismiss }: { message: string | null; 
     <div
       className="fixed top-4 right-4 z-[100] flex items-center gap-2 rounded-lg px-4 py-3 pointer-events-none"
       style={{
-        backgroundColor: "#0b1220",
+        backgroundColor: "var(--color-bg-surface)",
         border: "1px solid rgba(123,193,59,0.4)",
         boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
         opacity: message ? 1 : 0,
@@ -21,10 +21,10 @@ export default function Toast({ message, onDismiss }: { message: string | null; 
         transition: "opacity 0.25s ease, transform 0.25s ease",
       }}
     >
-      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#7bc13b" strokeWidth={2.5}>
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="var(--color-green-primary)" strokeWidth={2.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
       </svg>
-      <span className="text-xs font-semibold" style={{ color: "#f0f0f0" }}>{message ?? ""}</span>
+      <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>{message ?? ""}</span>
     </div>
   );
 }

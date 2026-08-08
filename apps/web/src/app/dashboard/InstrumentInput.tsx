@@ -71,7 +71,7 @@ export default function InstrumentInput({
       {open && matches.length > 0 && (
         <div
           className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden"
-          style={{ backgroundColor: "#0b1220", border: "1px solid #1a2d4a", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+          style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
         >
           {matches.map((inst, i) => (
             <button
@@ -83,8 +83,8 @@ export default function InstrumentInput({
               className="flex items-center justify-between w-full px-3 py-1.5 text-left transition-colors"
               style={{ backgroundColor: i === highlighted ? "rgba(123,193,59,0.12)" : "transparent" }}
             >
-              <span className="text-xs font-semibold" style={{ color: "#f0f0f0" }}>{inst.symbol}</span>
-              <span className="text-[10px] truncate ml-2" style={{ color: "#4a5d70" }}>{inst.name}</span>
+              <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>{inst.symbol}</span>
+              <span className="text-[10px] truncate ml-2" style={{ color: "var(--color-text-muted)" }}>{inst.name}</span>
             </button>
           ))}
         </div>
