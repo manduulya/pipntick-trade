@@ -1,42 +1,21 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import type { CreateTradeInput, Trade } from "@pipntick/shared";
-import { getContractSize } from "@pipntick/shared";
-import { useTrades, useCreateTrade, useUpdateTrade, useDeleteTrade } from "../../../lib/hooks";
+import type { Trade } from "@pipntick/shared";
+import { useTrades } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
 import { toJournalRow, type JournalRow } from "../../../lib/trade-utils";
 import { ApiError } from "../../../lib/api";
 import EmptyAccountsState from "../EmptyAccountsState";
-import InstrumentInput from "../InstrumentInput";
 import Toast from "../Toast";
 import { useTheme } from "../../../lib/theme-context";
+import { useTimeFormat } from "../../../lib/time-format-context";
+import { formatDate } from "../../../lib/time-format";
+import { TradeForm, type EntryMethod, entryTabs } from "../_components/TradeForm";
+import DeleteTradeModal from "../_components/DeleteTradeModal";
 
-type EntryMethod = "manual" | "screenshot";
 type SortKey = "date" | "instrument" | "direction" | "pnl" | "duration";
 type SortDir = "asc" | "desc";
-
-const inputStyle: React.CSSProperties = {
-  backgroundColor: "var(--color-bg-base)",
-  border: "1px solid var(--color-border)",
-  color: "var(--color-text-primary)",
-  borderRadius: 6,
-  fontSize: 12,
-  padding: "7px 10px",
-  outline: "none",
-  width: "100%",
-};
-
-function detectSession(timeStr: string): string {
-  if (!timeStr) return "";
-  const [h, m] = timeStr.split(":").map(Number);
-  const mins = h * 60 + m;
-  if (mins >= 480 && mins < 780) return "London";
-  if (mins >= 780 && mins < 1020) return "London / New York";
-  if (mins >= 1020 && mins < 1320) return "New York";
-  if (mins >= 0 && mins < 540) return "Tokyo";
-  return "Sydney";
-}
 
 function UploadZone({ accept, label, hint }: { accept: string; label: string; hint: string }) {
   const [dragging, setDragging] = useState(false);
@@ -93,143 +72,10 @@ function AnimatedContent({ method, children }: { method: EntryMethod; children: 
   );
 }
 
-// ISO -> "YYYY-MM-DDTHH:mm" (the <input type="datetime-local"> value shape). A plain slice,
-// not a Date round-trip, so the stored UTC wall-clock digits are preserved as-is.
-function toDatetimeLocal(iso: string | null): string {
-  return iso ? iso.slice(0, 16) : "";
-}
-
-function ManualEntryForm({ trade, onDone, onSaved }: { trade?: Trade; onDone: () => void; onSaved: (message: string) => void }) {
-  const isEdit = !!trade;
-  const createTrade = useCreateTrade();
-  const updateTrade = useUpdateTrade();
-  const mutation = isEdit ? updateTrade : createTrade;
-
-  const [direction, setDirection] = useState<"long" | "short">(trade?.direction ?? "long");
-  const [symbol, setSymbol] = useState(trade?.symbol ?? "");
-  const [entryPrice, setEntryPrice] = useState(trade?.entryPrice ?? "");
-  const [exitPrice, setExitPrice] = useState(trade?.exitPrice ?? "");
-  const [entryDateTime, setEntryDateTime] = useState(toDatetimeLocal(trade?.entryTime ?? null));
-  const [exitDateTime, setExitDateTime] = useState(toDatetimeLocal(trade?.exitTime ?? null));
-  const [lotSize, setLotSize] = useState(trade?.lotSize ?? "");
-  const [swap, setSwap] = useState(trade?.swap ?? "");
-  const [commission, setCommission] = useState(trade?.commission ?? "");
-  const [notes, setNotes] = useState(trade?.notes ?? "");
-  const [pnlOverride, setPnlOverride] = useState(trade?.pnlManual ?? false);
-  const [manualPnl, setManualPnl] = useState(trade?.pnl ?? "");
-  const session = detectSession(entryDateTime.slice(11, 16));
-
-  const computedPnl =
-    entryPrice !== "" && exitPrice !== "" && lotSize !== ""
-      ? (direction === "long" ? Number(exitPrice) - Number(entryPrice) : Number(entryPrice) - Number(exitPrice)) *
-          Number(lotSize) *
-          getContractSize(symbol) +
-        (swap !== "" ? Number(swap) : 0) +
-        (commission !== "" ? Number(commission) : 0)
-      : null;
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!symbol || !entryPrice || !lotSize || !entryDateTime) return;
-
-    const input: CreateTradeInput = {
-      symbol,
-      direction,
-      entryPrice: Number(entryPrice),
-      lotSize: Number(lotSize),
-      entryTime: new Date(`${entryDateTime}:00Z`).toISOString(),
-      session: session || undefined,
-      notes: notes || undefined,
-    };
-    if (exitPrice) input.exitPrice = Number(exitPrice);
-    if (exitDateTime) input.exitTime = new Date(`${exitDateTime}:00Z`).toISOString();
-    if (swap) input.swap = Number(swap);
-    if (commission) input.commission = Number(commission);
-    if (pnlOverride && manualPnl !== "") input.pnl = Number(manualPnl);
-
-    if (isEdit) {
-      updateTrade.mutate({ id: trade.id, input }, {
-        onSuccess: () => { onSaved("Trade updated successfully"); onDone(); },
-      });
-    } else {
-      createTrade.mutate(input, {
-        onSuccess: () => { onSaved("Trade added successfully"); onDone(); },
-      });
-    }
-  }
-
-  return (
-    <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
-      <InstrumentInput value={symbol} onChange={setSymbol} style={inputStyle} />
-      <div className="flex rounded-lg p-0.5 gap-0.5" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
-        {(["long", "short"] as const).map((d) => (
-          <button key={d} type="button" onClick={() => setDirection(d)} className="flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-all"
-            style={{
-              backgroundColor: direction === d ? (d === "long" ? "rgba(123,193,59,0.2)" : "rgba(239,68,68,0.2)") : "transparent",
-              color: direction === d ? (d === "long" ? "var(--color-green-neon)" : "var(--color-danger)") : "var(--color-text-muted)",
-              border: direction === d ? `1px solid ${d === "long" ? "rgba(123,193,59,0.4)" : "rgba(239,68,68,0.4)"}` : "1px solid transparent",
-            }}>
-            {d === "long" ? "▲ Long" : "▼ Short"}
-          </button>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Price</label><input type="number" step="any" placeholder="0.00" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} style={inputStyle} /></div>
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Price</label><input type="number" step="any" placeholder="0.00 (optional)" value={exitPrice} onChange={(e) => setExitPrice(e.target.value)} style={inputStyle} /></div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Date & Time (UTC)</label><input type="datetime-local" value={entryDateTime} onChange={(e) => setEntryDateTime(e.target.value)} style={inputStyle} /></div>
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Date & Time (UTC)</label><input type="datetime-local" value={exitDateTime} onChange={(e) => setExitDateTime(e.target.value)} style={inputStyle} /></div>
-      </div>
-      <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
-        <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Session</span>
-        <span className="text-[11px] font-semibold" style={{ color: session ? "var(--color-green-primary)" : "var(--color-text-disabled)" }}>{session || "— enter entry time"}</span>
-      </div>
-      <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Lot Size</label><input type="number" step="any" placeholder="0.01" value={lotSize} onChange={(e) => setLotSize(e.target.value)} style={inputStyle} /></div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Swap</label><input type="number" step="any" placeholder="0.00 (optional)" value={swap} onChange={(e) => setSwap(e.target.value)} style={inputStyle} /></div>
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Commission / Charges</label><input type="number" step="any" placeholder="0.00 (optional)" value={commission} onChange={(e) => setCommission(e.target.value)} style={inputStyle} /></div>
-      </div>
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between">
-          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>P&L</label>
-          <label className="flex items-center gap-1.5 text-[10px] cursor-pointer" style={{ color: "var(--color-text-muted)" }}>
-            <input type="checkbox" checked={pnlOverride} onChange={(e) => setPnlOverride(e.target.checked)} className="cursor-pointer" />
-            Override
-          </label>
-        </div>
-        {pnlOverride ? (
-          <input type="number" step="any" placeholder="0.00" value={manualPnl} onChange={(e) => setManualPnl(e.target.value)} style={inputStyle} />
-        ) : (
-          <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
-            <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Auto-calculated</span>
-            <span className="text-[11px] font-semibold" style={{ color: computedPnl === null ? "var(--color-text-disabled)" : computedPnl >= 0 ? "var(--color-green-primary)" : "var(--color-danger)" }}>
-              {computedPnl === null ? "— enter exit price" : `${computedPnl >= 0 ? "+" : ""}$${Math.abs(computedPnl).toFixed(2)}`}
-            </span>
-          </div>
-        )}
-      </div>
-      <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Notes</label><textarea placeholder="Trade notes, setup, emotions..." rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, resize: "none" }} /></div>
-      {mutation.isError && (
-        <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>
-          {mutation.error instanceof ApiError ? mutation.error.message : `Failed to ${isEdit ? "save" : "add"} trade.`}
-        </p>
-      )}
-      <button type="submit" className="neon-btn w-full rounded-lg py-2.5 text-sm font-semibold" disabled={mutation.isPending} style={{ opacity: mutation.isPending ? 0.6 : 1 }}>
-        {mutation.isPending ? (isEdit ? "Saving..." : "Adding...") : isEdit ? "Save Changes" : "Add Trade"}
-      </button>
-    </form>
-  );
-}
-
 function AddTradeModal({ trade, onClose, onSaved }: { trade?: Trade; onClose: () => void; onSaved: (message: string) => void }) {
   const isEdit = !!trade;
   const [method, setMethod] = useState<EntryMethod>("manual");
-
-  const tabs = [
-    { id: "manual" as EntryMethod, label: "Manual", icon: <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg> },
-    { id: "screenshot" as EntryMethod, label: "Screenshot", icon: <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
-  ];
+  const tabs = entryTabs;
 
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
@@ -304,94 +150,10 @@ function AddTradeModal({ trade, onClose, onSaved }: { trade?: Trade; onClose: ()
         <div className="flex-1 min-h-0 overflow-y-auto p-5">
         <AnimatedContent method={isEdit ? "manual" : method}>
         <div className="flex flex-col gap-3">
-          {(isEdit || method === "manual") && <ManualEntryForm trade={trade} onDone={handleClose} onSaved={onSaved} />}
+          {(isEdit || method === "manual") && <TradeForm trade={trade} onDone={handleClose} onSaved={onSaved} />}
           {!isEdit && method === "screenshot" && <UploadZone accept="image/*" label="Drop screenshot here or click to browse" hint="PNG, JPG, WEBP — AI will extract trade data" />}
         </div>
         </AnimatedContent>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DeleteTradeModal({ trade, onClose }: { trade: Trade; onClose: () => void }) {
-  const [visible, setVisible] = useState(false);
-  useState(() => { requestAnimationFrame(() => setVisible(true)); });
-
-  const [formError, setFormError] = useState<string | null>(null);
-  const deleteTrade = useDeleteTrade();
-
-  function handleClose() {
-    setVisible(false);
-    setTimeout(onClose, 300);
-  }
-
-  function handleConfirm() {
-    setFormError(null);
-    deleteTrade.mutate(trade.id, {
-      onSuccess: handleClose,
-      onError: (err) => {
-        setFormError(err instanceof ApiError ? err.message : "Failed to delete trade.");
-      },
-    });
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{
-        backgroundColor: visible ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0)",
-        backdropFilter: visible ? "blur(4px)" : "blur(0px)",
-        transition: "background-color 0.3s ease, backdrop-filter 0.3s ease",
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl overflow-hidden flex flex-col"
-        style={{
-          backgroundColor: "var(--color-bg-surface)",
-          border: "1px solid var(--color-danger)",
-          opacity: visible ? 1 : 0,
-          transform: visible ? "translateY(0) scale(1)" : "translateY(16px) scale(0.97)",
-          transition: "opacity 0.3s ease, transform 0.3s ease",
-        }}
-      >
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--color-border)" }}>
-          <h2 className="text-sm font-bold" style={{ color: "var(--color-danger)" }}>Delete Trade</h2>
-          <button onClick={handleClose} className="hover:opacity-60 transition-opacity" style={{ color: "var(--color-text-muted)" }}>
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-3 px-5 py-4">
-          <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
-            Delete the <span style={{ color: "var(--color-text-primary)" }}>{trade.symbol}</span> trade from {trade.entryTime.slice(0, 10)}?
-            This cannot be undone.
-          </p>
-
-          {formError && (
-            <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>{formError}</p>
-          )}
-
-          <div className="flex gap-2 mt-1">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex-1 rounded-lg text-xs font-semibold py-2.5"
-              style={{ backgroundColor: "transparent", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={deleteTrade.isPending}
-              onClick={handleConfirm}
-              className="flex-1 rounded-lg text-xs font-semibold py-2.5 transition-opacity"
-              style={{ backgroundColor: "var(--color-danger)", color: "var(--color-bg-base)", opacity: deleteTrade.isPending ? 0.6 : 1 }}
-            >
-              {deleteTrade.isPending ? "Deleting..." : "Delete"}
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -419,6 +181,7 @@ export default function JournalPage() {
   const hoverOverlay = theme === "light" ? "0,0,0" : "255,255,255";
   const { data, isLoading, isError, error } = useTrades();
   const { accounts } = useSelectedAccount();
+  const { timeFormat } = useTimeFormat();
   const [search, setSearch]     = useState("");
   const [filter, setFilter]     = useState<"all" | "long" | "short" | "win" | "loss">("all");
   const [sortKey, setSortKey]   = useState<SortKey>("date");
@@ -595,7 +358,7 @@ export default function JournalPage() {
                       onMouseEnter={(e) => (e.currentTarget as HTMLTableRowElement).style.backgroundColor = `rgba(${hoverOverlay},0.02)`}
                       onMouseLeave={(e) => (e.currentTarget as HTMLTableRowElement).style.backgroundColor = "transparent"}
                     >
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.date}</td>
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{formatDate(t.date, timeFormat)}</td>
                       <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: "var(--color-text-primary)" }}>{t.instrument}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span

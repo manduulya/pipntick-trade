@@ -5,6 +5,7 @@ import "./globals.css";
 import Providers from "./providers";
 import { ThemeProvider } from "../lib/theme-context";
 import { THEME_INIT_SCRIPT } from "../lib/theme";
+import { TimeFormatProvider } from "../lib/time-format-context";
 
 const ADSENSE_CLIENT_ID = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
 
@@ -48,7 +49,9 @@ export default function RootLayout({
               in sync by hand, see lib/theme.ts. */}
           <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
           <ThemeProvider>
-            <Providers>{children}</Providers>
+            <TimeFormatProvider>
+              <Providers>{children}</Providers>
+            </TimeFormatProvider>
           </ThemeProvider>
         </body>
       </html>

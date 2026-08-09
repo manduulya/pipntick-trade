@@ -1,15 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { CreateTradeInput, ParsedTradeScreenshot } from "@pipntick/shared";
-import { useCreateTrade, useParseTradeScreenshot, useTrades } from "../../lib/hooks";
+import type { ParsedTradeScreenshot, Trade } from "@pipntick/shared";
+import { useParseTradeScreenshot, useTrades } from "../../lib/hooks";
 import { useSelectedAccount } from "../../lib/account-context";
 import { computeDashboardStats, computeMonthCalendar, isClosed } from "../../lib/trade-utils";
 import { ApiError } from "../../lib/api";
 import { useTheme } from "../../lib/theme-context";
 import EmptyAccountsState from "./EmptyAccountsState";
-import InstrumentInput from "./InstrumentInput";
 import Toast from "./Toast";
+import { TradeForm, type EntryMethod, entryTabs } from "./_components/TradeForm";
+import DayTradesModal from "./_components/DayTradesModal";
 
 function fmtPnl(pnl: number) {
   const str = `$${Math.abs(pnl).toFixed(2)}`;
@@ -23,11 +24,14 @@ function MonthlyCalendar({
   offset,
   onOffsetChange,
   accountCreatedAt,
+  onDayClick,
 }: {
   calendar: Record<number, { trades: number; pnl: number }>;
   offset: number;
   onOffsetChange: (updater: (o: number) => number) => void;
   accountCreatedAt: string;
+  /** Only called for days that actually have trades — empty days aren't clickable. */
+  onDayClick: (year: number, month: number, day: number) => void;
 }) {
   const { theme } = useTheme();
   const now = new Date();
@@ -117,10 +121,15 @@ function MonthlyCalendar({
           const border   = isWin  ? "1px solid rgba(123,193,59,0.55)" : isLoss ? "1px solid rgba(239,68,68,0.55)" : `1px solid rgba(${overlay},0.1)`;
           const pnlColor = isWin  ? "var(--color-green-neon)" : isLoss ? "var(--color-danger)" : "var(--color-text-muted)";
 
+          const clickable = !!data;
+
           return (
-            <div
+            <button
               key={day}
-              className={`flex flex-col px-1 pt-1 pb-1 rounded-md transition-opacity aspect-square ${isBeforeCreation ? "cursor-not-allowed" : "cursor-pointer hover:opacity-80"}`}
+              type="button"
+              disabled={!clickable}
+              onClick={() => clickable && onDayClick(year, month, day)}
+              className={`flex flex-col px-1 pt-1 pb-1 rounded-md transition-opacity aspect-square text-left ${isBeforeCreation ? "cursor-not-allowed" : clickable ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
               style={{
                 backgroundColor: isBeforeCreation ? `rgba(${overlay},0.03)` : bg,
                 border: isBeforeCreation ? `1px solid rgba(${overlay},0.06)` : border,
@@ -137,7 +146,7 @@ function MonthlyCalendar({
                   <span className="text-[9px] sm:text-[11px] font-semibold leading-none mt-1 truncate" style={{ color: "var(--color-text-primary)" }}>{data.trades} {data.trades === 1 ? "trade" : "trades"}</span>
                 </>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
@@ -146,199 +155,6 @@ function MonthlyCalendar({
 }
 
 // ── Trade Entry Panel ──────────────────────────────────────────────────────────
-
-type EntryMethod = "manual" | "screenshot";
-
-const entryTabs: { id: EntryMethod; label: string; icon: React.ReactNode }[] = [
-  {
-    id: "manual",
-    label: "Manual",
-    icon: (
-      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-      </svg>
-    ),
-  },
-  {
-    id: "screenshot",
-    label: "Screenshot",
-    icon: (
-      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-    ),
-  },
-];
-
-const inputStyle: React.CSSProperties = {
-  backgroundColor: "var(--color-bg-base)",
-  border: "1px solid var(--color-border)",
-  color: "var(--color-text-primary)",
-  borderRadius: 6,
-  fontSize: 12,
-  padding: "7px 10px",
-  outline: "none",
-  width: "100%",
-};
-
-function detectSession(timeStr: string): string {
-  if (!timeStr) return "";
-  const [h, m] = timeStr.split(":").map(Number);
-  const mins = h * 60 + m;
-  if (mins >= 480 && mins < 780)  return "London";
-  if (mins >= 780 && mins < 1020) return "London / New York";
-  if (mins >= 1020 && mins < 1320) return "New York";
-  if (mins >= 0   && mins < 540)  return "Tokyo";
-  return "Sydney";
-}
-
-// ISO-like "YYYY-MM-DDTHH:mm:ss" -> "YYYY-MM-DDTHH:mm" (the <input type="datetime-local"> value
-// shape). A plain slice, not a Date round-trip, so the UTC wall-clock digits are preserved as-is.
-function toDatetimeLocal(value: string | null | undefined): string {
-  return value ? value.slice(0, 16) : "";
-}
-
-function ManualEntry({ prefill }: { prefill?: ParsedTradeScreenshot | null }) {
-  const createTrade = useCreateTrade();
-
-  const [direction, setDirection] = useState<"long" | "short">(prefill?.direction ?? "long");
-  const [symbol, setSymbol] = useState(prefill?.symbol ?? "");
-  const [entryPrice, setEntryPrice] = useState(prefill?.entryPrice != null ? String(prefill.entryPrice) : "");
-  const [exitPrice, setExitPrice] = useState(prefill?.exitPrice != null ? String(prefill.exitPrice) : "");
-  const [entryDateTime, setEntryDateTime] = useState(toDatetimeLocal(prefill?.entryDateTime));
-  const [exitDateTime, setExitDateTime] = useState(toDatetimeLocal(prefill?.exitDateTime));
-  const [lotSize, setLotSize] = useState(prefill?.lotSize != null ? String(prefill.lotSize) : "");
-  const [swap, setSwap] = useState(prefill?.swap != null ? String(prefill.swap) : "");
-  const [commission, setCommission] = useState(prefill?.commission != null ? String(prefill.commission) : "");
-  const [notes, setNotes] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
-  const session = detectSession(entryDateTime.slice(11, 16));
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!symbol || !entryPrice || !lotSize || !entryDateTime) return;
-
-    const input: CreateTradeInput = {
-      symbol,
-      direction,
-      entryPrice: Number(entryPrice),
-      lotSize: Number(lotSize),
-      entryTime: new Date(`${entryDateTime}:00Z`).toISOString(),
-      session: session || undefined,
-      notes: notes || undefined,
-    };
-    if (exitPrice) input.exitPrice = Number(exitPrice);
-    if (exitDateTime) input.exitTime = new Date(`${exitDateTime}:00Z`).toISOString();
-    if (swap) input.swap = Number(swap);
-    if (commission) input.commission = Number(commission);
-
-    createTrade.mutate(input, {
-      onSuccess: () => {
-        setSymbol(""); setEntryPrice(""); setExitPrice("");
-        setEntryDateTime(""); setExitDateTime(""); setLotSize("");
-        setSwap(""); setCommission(""); setNotes("");
-        setToast("Trade added successfully");
-      },
-    });
-  }
-
-  return (
-    <form className="flex flex-col gap-2.5" onSubmit={handleSubmit}>
-      <Toast message={toast} onDismiss={() => setToast(null)} />
-      <InstrumentInput value={symbol} onChange={setSymbol} style={inputStyle} />
-
-      <div className="flex rounded-lg p-0.5 gap-0.5" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
-        {(["long", "short"] as const).map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => setDirection(d)}
-            className="flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-all"
-            style={{
-              backgroundColor: direction === d ? (d === "long" ? "rgba(123,193,59,0.2)" : "rgba(239,68,68,0.2)") : "transparent",
-              color: direction === d ? (d === "long" ? "var(--color-green-neon)" : "var(--color-danger)") : "var(--color-text-muted)",
-              border: direction === d ? `1px solid ${d === "long" ? "rgba(123,193,59,0.4)" : "rgba(239,68,68,0.4)"}` : "1px solid transparent",
-            }}
-          >
-            {d === "long" ? "▲ Long" : "▼ Short"}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Price</label>
-          <input type="number" step="any" placeholder="0.00" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} style={inputStyle} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Price</label>
-          <input type="number" step="any" placeholder="0.00 (optional)" value={exitPrice} onChange={(e) => setExitPrice(e.target.value)} style={inputStyle} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Date & Time (UTC)</label>
-          <input
-            type="datetime-local"
-            value={entryDateTime}
-            onChange={(e) => setEntryDateTime(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Date & Time (UTC)</label>
-          <input type="datetime-local" value={exitDateTime} onChange={(e) => setExitDateTime(e.target.value)} style={inputStyle} />
-        </div>
-      </div>
-
-      {/* Auto-detected session */}
-      <div
-        className="flex items-center justify-between rounded-lg px-3 py-2"
-        style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}
-      >
-        <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Session</span>
-        <span
-          className="text-[11px] font-semibold"
-          style={{ color: session ? "var(--color-green-primary)" : "var(--color-text-disabled)" }}
-        >
-          {session || "— enter entry time"}
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Lot Size</label>
-        <input type="number" step="any" placeholder="0.01" value={lotSize} onChange={(e) => setLotSize(e.target.value)} style={inputStyle} />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Swap</label>
-          <input type="number" step="any" placeholder="0.00 (optional)" value={swap} onChange={(e) => setSwap(e.target.value)} style={inputStyle} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Commission / Charges</label>
-          <input type="number" step="any" placeholder="0.00 (optional)" value={commission} onChange={(e) => setCommission(e.target.value)} style={inputStyle} />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Notes</label>
-        <textarea placeholder="Trade notes, setup, emotions..." rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, resize: "none" }} />
-      </div>
-
-      {createTrade.isError && (
-        <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>
-          {createTrade.error instanceof ApiError ? createTrade.error.message : "Failed to add trade."}
-        </p>
-      )}
-
-      <button type="submit" className="neon-btn w-full rounded-lg py-2 text-xs font-semibold" disabled={createTrade.isPending} style={{ opacity: createTrade.isPending ? 0.6 : 1 }}>
-        {createTrade.isPending ? "Adding..." : "Add Trade"}
-      </button>
-    </form>
-  );
-}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -439,7 +255,7 @@ function UploadZone({
   );
 }
 
-function TradeEntryPanel({ onClose }: { onClose?: () => void }) {
+function TradeEntryPanel({ onClose }: { onClose: () => void }) {
   const { theme } = useTheme();
   // White-tint hover overlay only reads as a highlight against a dark surface — flip to a dark
   // tint in light mode, where it'd otherwise be invisible.
@@ -447,6 +263,7 @@ function TradeEntryPanel({ onClose }: { onClose?: () => void }) {
   const [method, setMethod] = useState<EntryMethod>("manual");
   const [prefill, setPrefill] = useState<ParsedTradeScreenshot | null>(null);
   const [prefillKey, setPrefillKey] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
 
   function handleParsed(parsed: ParsedTradeScreenshot) {
     setPrefill(parsed);
@@ -456,17 +273,14 @@ function TradeEntryPanel({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="flex flex-col h-full rounded-xl overflow-hidden" style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}>
-      {/* Header — a close button only when opened as a modal (mobile); the inline desktop
-          panel has nothing to close. */}
+      {/* Header */}
       <div className="shrink-0 px-3 pt-3 flex items-center justify-between">
         <h2 className="text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>Add Trade</h2>
-        {onClose && (
-          <button onClick={onClose} className="hover:opacity-60 transition-opacity" style={{ color: "var(--color-text-muted)" }}>
-            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
+        <button onClick={onClose} className="hover:opacity-60 transition-opacity" style={{ color: "var(--color-text-muted)" }}>
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       {/* Tabs */}
@@ -504,7 +318,8 @@ function TradeEntryPanel({ onClose }: { onClose?: () => void }) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-3">
-        {method === "manual"     && <ManualEntry key={prefillKey} prefill={prefill} />}
+        <Toast message={toast} onDismiss={() => setToast(null)} />
+        {method === "manual"     && <TradeForm key={prefillKey} prefill={prefill} onSaved={setToast} />}
         {method === "screenshot" && (
           <UploadZone
             accept="image/*"
@@ -518,9 +333,9 @@ function TradeEntryPanel({ onClose }: { onClose?: () => void }) {
   );
 }
 
-// Mobile-only: TradeEntryPanel's inline desktop card, opened as a modal instead — same
-// fade+scale transition shape as every other modal in the app (AddAccountModal etc.).
-function MobileAddTradeModal({ onClose }: { onClose: () => void }) {
+// Wraps TradeEntryPanel as a modal — same fade+scale transition shape as every other modal in
+// the app (AddAccountModal etc.). Used at every breakpoint; there's no inline desktop variant.
+function AddTradeModal({ onClose }: { onClose: () => void }) {
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
 
@@ -562,7 +377,8 @@ export default function DashboardPage() {
   const startingBalance = selectedAccount ? Number(selectedAccount.startingBalance) : 0;
 
   const [calendarOffset, setCalendarOffset] = useState(0);
-  const [showMobileAddTrade, setShowMobileAddTrade] = useState(false);
+  const [showAddTrade, setShowAddTrade] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<{ year: number; month: number; day: number } | null>(null);
 
   const closed = useMemo(() => (trades ?? []).filter(isClosed), [trades]);
   const dashboardStats = useMemo(() => computeDashboardStats(closed), [closed]);
@@ -574,6 +390,17 @@ export default function DashboardPage() {
     () => computeMonthCalendar(trades ?? [], viewed.getFullYear(), viewed.getMonth()),
     [trades, viewed],
   );
+
+  // Same bucketing rule as computeMonthCalendar (local-date getters, closed trades only) so this
+  // list always matches the count shown on the calendar tile that opened it.
+  const selectedDayTrades = useMemo<Trade[]>(() => {
+    if (!selectedDay) return [];
+    return (trades ?? []).filter((t) => {
+      if (t.pnl === null) return false;
+      const d = new Date(t.entryTime);
+      return d.getFullYear() === selectedDay.year && d.getMonth() === selectedDay.month && d.getDate() === selectedDay.day;
+    });
+  }, [trades, selectedDay]);
 
   const stats = [
     { label: "Total Portfolio", value: `$${portfolioValue.toFixed(2)}`, sub: "starting balance + all-time P&L", positive: dashboardStats.totalPnl >= 0 },
@@ -598,9 +425,36 @@ export default function DashboardPage() {
 
   return (
     <div className="h-full flex flex-col gap-3 p-4 overflow-y-auto">
-      {/* Header */}
+      {/* Header. QuoteBar floats top-right at lg+ (dashboard/layout.tsx) and owns that corner, so
+          Add Trade can't sit flush against the page's right edge there — instead it's inline
+          right after the title at lg+, and only moves to the row's right side (opposite the
+          title+date block) below lg, where QuoteBar doesn't float and there's no collision. */}
       <div className="shrink-0">
-        <h1 className="text-base font-bold" style={{ color: "var(--color-text-primary)" }}>Dashboard</h1>
+        <div className="flex items-center justify-between gap-3 lg:justify-start">
+          <div className="flex items-center gap-3">
+            <h1 className="text-base font-bold" style={{ color: "var(--color-text-primary)" }}>Dashboard</h1>
+            <button
+              type="button"
+              onClick={() => setShowAddTrade(true)}
+              className="neon-btn hidden lg:flex shrink-0 items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold"
+            >
+              <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Trade
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAddTrade(true)}
+            className="neon-btn lg:hidden shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-semibold"
+          >
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Trade
+          </button>
+        </div>
         <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
           {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
         </p>
@@ -619,35 +473,28 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Main: calendar | entry panel — stacked below lg, side by side at lg+ */}
-      <div className="flex flex-col lg:flex-row gap-3 shrink-0">
-        <div className="w-full lg:max-w-[800px]">
-          <MonthlyCalendar
-            calendar={calendar}
-            offset={calendarOffset}
-            onOffsetChange={setCalendarOffset}
-            accountCreatedAt={selectedAccount?.createdAt ?? new Date(0).toISOString()}
-          />
-        </div>
-        {/* Desktop: inline panel next to the calendar. Mobile: a compact button that opens the
-            same panel as a modal instead — the full form doesn't need to permanently eat space
-            below the calendar on a phone. */}
-        <div className="hidden lg:block flex-1" style={{ minWidth: 260 }}>
-          <TradeEntryPanel />
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowMobileAddTrade(true)}
-          className="neon-btn lg:hidden flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold"
-        >
-          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          Add Trade
-        </button>
+      {/* Calendar — Add Trade (header, above) now opens as a modal at every breakpoint, rather
+          than eating half this row as a permanently inline panel. */}
+      <div className="w-full lg:max-w-[800px] shrink-0">
+        <MonthlyCalendar
+          calendar={calendar}
+          offset={calendarOffset}
+          onOffsetChange={setCalendarOffset}
+          accountCreatedAt={selectedAccount?.createdAt ?? new Date(0).toISOString()}
+          onDayClick={(year, month, day) => setSelectedDay({ year, month, day })}
+        />
       </div>
 
-      {showMobileAddTrade && <MobileAddTradeModal onClose={() => setShowMobileAddTrade(false)} />}
+      {showAddTrade && <AddTradeModal onClose={() => setShowAddTrade(false)} />}
+      {selectedDay && (
+        <DayTradesModal
+          trades={selectedDayTrades}
+          year={selectedDay.year}
+          month={selectedDay.month}
+          day={selectedDay.day}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
 
     </div>
   );

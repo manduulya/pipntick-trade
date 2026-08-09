@@ -2,11 +2,23 @@
 
 import { useState } from "react";
 import { useTheme } from "../../../lib/theme-context";
+import { useTimeFormat } from "../../../lib/time-format-context";
 import DeleteAccountModal from "./DeleteAccountModal";
+import DateTimeFormatSelect from "../_components/DateTimeFormatSelect";
+
+// Live example shown next to each preset in the dropdown — the actual current date/time, just to
+// demonstrate the pattern; which instant it is doesn't matter, only the digit arrangement does.
+function nowAsPickerValue(): string {
+  const n = new Date();
+  const pad = (v: number) => String(v).padStart(2, "0");
+  return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}T${pad(n.getHours())}:${pad(n.getMinutes())}`;
+}
 
 export default function SettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const { theme, setTheme } = useTheme();
+  const { timeFormat, setTimeFormat } = useTimeFormat();
+  const previewValue = nowAsPickerValue();
 
   return (
     <div className="h-full overflow-y-auto p-8">
@@ -41,6 +53,14 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      <div
+        className="max-w-lg rounded-xl p-5 mb-4 flex items-center justify-between gap-4"
+        style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
+      >
+        <h2 className="text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>Date &amp; time format:</h2>
+        <DateTimeFormatSelect value={timeFormat} onChange={setTimeFormat} previewValue={previewValue} />
       </div>
 
       <div

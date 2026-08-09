@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import type { TradingAccount } from "@pipntick/shared";
 import { useAccountTrades, useUpdateAccount } from "../../lib/hooks";
+import { useTimeFormat } from "../../lib/time-format-context";
+import { formatDate } from "../../lib/time-format";
 import { ApiError } from "../../lib/api";
 import DeleteTradingAccountModal from "./DeleteTradingAccountModal";
 
@@ -27,6 +29,7 @@ export default function AccountSettingsModal({
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
 
+  const { timeFormat } = useTimeFormat();
   const [name, setName] = useState(account.name);
   const [broker, setBroker] = useState(account.broker ?? "");
   const [currency, setCurrency] = useState(account.currency);
@@ -72,7 +75,7 @@ export default function AccountSettingsModal({
     }
     if (earliestTradeDate && createdAt > earliestTradeDate) {
       setFormError(
-        `This account has a trade recorded on ${earliestTradeDate}. Choose a created date on or before that, or delete the conflicting trade first.`,
+        `This account has a trade recorded on ${formatDate(earliestTradeDate, timeFormat)}. Choose a created date on or before that, or delete the conflicting trade first.`,
       );
       return;
     }
@@ -149,7 +152,7 @@ export default function AccountSettingsModal({
             <input type="date" max={today} value={createdAt} onChange={(e) => setCreatedAt(e.target.value)} style={inputStyle} />
             {earliestTradeDate && (
               <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-                Earliest trade on record: {earliestTradeDate} — created date can&apos;t be set after this.
+                Earliest trade on record: {formatDate(earliestTradeDate, timeFormat)} — created date can&apos;t be set after this.
               </p>
             )}
           </div>

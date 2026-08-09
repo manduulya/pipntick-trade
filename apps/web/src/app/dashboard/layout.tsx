@@ -134,6 +134,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           boxShadow: drawerOpen ? "0 0 40px rgba(0,0,0,0.5)" : undefined,
         }}
       >
+        {/* Close (slide back) — mobile/tablet only; lg+ has no drawer to close, the rail is
+            always visible there. Closing via backdrop click/Escape already worked, but the
+            drawer itself had no visible affordance to dismiss it. */}
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(false)}
+          aria-label="Close navigation menu"
+          className="focus-ring press-scale lg:hidden self-end -mt-1 mb-2 p-1.5 rounded-md transition-colors"
+          style={{ color: "var(--color-text-muted)" }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-text-primary)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-text-muted)"; }}
+        >
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+
         {/* Logo */}
         <ViewTransitionLink href="/" className="flex justify-center mb-4 px-2">
           <Image src="/logo.svg" alt="pipntick" width={140} height={140} priority />
@@ -254,27 +271,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main */}
       <main className="flex-1 flex flex-col overflow-hidden" style={{ position: "relative" }}>
-        {/* Mobile-only header strip: hamburger opens the drawer. Hidden at lg+, where the
-            sidebar is always visible and needs no toggle. */}
-        <div className="lg:hidden flex items-center shrink-0 px-4 py-3" style={{ borderBottom: "1px solid var(--color-border)" }}>
+        {/* Mobile-only header strip: hamburger + quote inline together, side by side, instead of
+            the quote wrapping onto its own row below. Collapses to zero padding/border at lg+,
+            where the sidebar is always visible (no drawer toggle needed) and QuoteBar switches to
+            floating independently over the page instead — same single QuoteBar instance handles
+            both via its wrapper's responsive positioning below, not two separate mounts. */}
+        <div
+          className="flex items-start gap-3 shrink-0 px-4 py-3 lg:p-0 border-b lg:border-b-0"
+          style={{ borderColor: "var(--color-border)" }}
+        >
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
             aria-label="Open navigation menu"
-            className="focus-ring press-scale p-2 -ml-2 rounded-md"
+            className="focus-ring press-scale lg:hidden shrink-0 p-2 -ml-2 rounded-md"
             style={{ color: "var(--color-text-secondary)" }}
           >
             <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-        </div>
 
-        {/* QuoteBar: floats top-right at lg+ (original design, unchanged), single line, growing
-            as wide as it needs to the left rather than capped/wrapped; sits inline below the
-            mobile header strip on smaller screens instead of overlapping page content. */}
-        <div className="px-4 pt-3 lg:px-0 lg:pt-0 lg:absolute lg:top-5 lg:right-4 lg:z-10">
-          <QuoteBar />
+          {/* QuoteBar: inline beside the hamburger below lg; floats top-right at lg+ instead
+              (original design, unchanged there), single line, growing as wide as it needs to the
+              left rather than capped/wrapped. */}
+          <div className="min-w-0 flex-1 lg:flex-none lg:absolute lg:top-5 lg:right-4 lg:z-10">
+            <QuoteBar />
+          </div>
         </div>
 
         <div className="flex-1 min-h-0">

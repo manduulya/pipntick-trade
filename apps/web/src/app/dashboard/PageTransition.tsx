@@ -8,6 +8,11 @@ import { useEffect, useState } from "react";
  * rather than an instant swap — gives the sidebar's active-state change some spatial continuity
  * with the content it's pointing at. Respects prefers-reduced-motion via the global CSS rule in
  * globals.css (author-stylesheet !important beats this inline style).
+ *
+ * `transform` is omitted (not set to "translateY(0)") once visible — any transform value, even a
+ * no-op one, makes this div a new containing block for `position: fixed` descendants, which broke
+ * every dashboard modal's fullscreen backdrop (it covered only this div's box instead of the real
+ * viewport, leaving the mobile header/QuoteBar strip uncovered above it).
  */
 export default function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -37,7 +42,7 @@ export default function PageTransition({ children }: { children: React.ReactNode
       className="h-full"
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(6px)",
+        transform: visible ? undefined : "translateY(6px)",
         transition: "opacity 0.2s ease, transform 0.2s ease",
       }}
     >
