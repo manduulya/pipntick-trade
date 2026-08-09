@@ -158,7 +158,7 @@ export default function DayTradesModal({
       </div>
 
       {editingTrade && <EditTradeModal trade={editingTrade} onClose={() => setEditingTrade(null)} onSaved={setToast} />}
-      {deletingTrade && <DeleteTradeModal trade={deletingTrade} onClose={() => setDeletingTrade(null)} />}
+      {deletingTrade && <DeleteTradeModal trade={deletingTrade} onClose={() => setDeletingTrade(null)} onSaved={setToast} />}
     </div>
   );
 }

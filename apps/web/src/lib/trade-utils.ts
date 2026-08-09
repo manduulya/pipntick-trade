@@ -2,6 +2,22 @@ import type { Trade } from "@pipntick/shared";
 
 export type Period = "weekly" | "monthly" | "yearly";
 
+// entryTime/exitTime are entered and stored as literal UTC wall-clock digits (TradeForm appends
+// "Z" to whatever the user typed, unrelated to their actual timezone — see the "(UTC)" field
+// labels and detectSession's UTC-hour session boundaries) — not a real timezone-aware instant tied
+// to wherever the trade happened. Calendar/period bucketing needs to group by *that* wall-clock
+// date, not by whatever local date the underlying UTC instant happens to fall on for the viewer's
+// browser: a trade entered as "2026-08-04T00:00Z" is midnight Aug 3 local in any timezone behind
+// UTC, so reading it with plain local getters (getDate(), getMonth(), ...) silently shifts it back
+// a day for most of the Americas. Reconstructing a Date from the UTC fields makes its *local*
+// getters return the original wall-clock digits instead, so all the local-getter-based bucketing
+// below (periodRange's boundaries, computeCharts' bucket keys, etc.) lines up correctly. Never use
+// this for elapsed-time arithmetic (formatDuration, avgDuration) — those need the real instant.
+export function utcWallClock(iso: string): Date {
+  const d = new Date(iso);
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+}
+
 // Calendar-aligned, not a rolling window: "weekly" is Sun-Sat of a given week, "monthly" is the
 // 1st through the last day of a given month, "yearly" is Jan 1 - Dec 31 of a given year.
 // `offset` counts periods back from `from` (0 = the period containing `from`, 1 = the previous
@@ -52,7 +68,7 @@ export function periodLabel(period: Period, offset: number = 0, from: Date = new
 export function filterByPeriod(trades: Trade[], period: Period, offset: number = 0): Trade[] {
   const { start, end } = periodRange(period, offset);
   return trades.filter((t) => {
-    const d = new Date(t.entryTime);
+    const d = utcWallClock(t.entryTime);
     return d >= start && d < end;
   });
 }
@@ -251,7 +267,7 @@ export function computeCharts(
   const pnlByBucket = new Map<string, number>(buckets.map((b) => [b.key, 0]));
   let baseline = startingBalance;
   for (const t of allClosed) {
-    const d = new Date(t.entryTime);
+    const d = utcWallClock(t.entryTime);
     if (d < start) {
       baseline += pnlOf(t);
       continue;
@@ -289,7 +305,7 @@ export function computeDashboardStats(allClosed: Trade[]) {
   const wins = allClosed.filter((t) => pnlOf(t) > 0).length;
   const now = new Date();
   const tradesThisMonth = allClosed.filter((t) => {
-    const d = new Date(t.entryTime);
+    const d = utcWallClock(t.entryTime);
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   }).length;
 
@@ -309,7 +325,7 @@ export function computeMonthCalendar(
   const result: Record<number, { trades: number; pnl: number }> = {};
   for (const t of trades) {
     if (t.pnl === null) continue;
-    const d = new Date(t.entryTime);
+    const d = utcWallClock(t.entryTime);
     if (d.getFullYear() !== year || d.getMonth() !== month) continue;
     const day = d.getDate();
     const entry = result[day] ?? { trades: 0, pnl: 0 };

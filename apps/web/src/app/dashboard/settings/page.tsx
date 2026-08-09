@@ -25,7 +25,7 @@ export default function SettingsPage() {
       <h1 className="text-lg font-bold mb-6" style={{ color: "var(--color-text-primary)" }}>Settings</h1>
 
       <div
-        className="max-w-lg rounded-xl p-5 mb-4 flex items-center justify-between gap-4"
+        className="max-w-lg rounded-xl p-5 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
         style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
       >
         <h2 className="text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>Color theme:</h2>
@@ -39,7 +39,7 @@ export default function SettingsPage() {
               type="button"
               onClick={() => setTheme(t)}
               aria-pressed={theme === t}
-              className="focus-ring press-scale px-6 py-2 text-sm font-semibold rounded-xl capitalize cursor-pointer"
+              className="focus-ring press-scale flex-1 sm:flex-none px-6 py-2 text-sm font-semibold rounded-xl capitalize cursor-pointer"
               style={{
                 backgroundColor: theme === t ? "var(--color-green-primary)" : "transparent",
                 color: theme === t ? "var(--color-on-primary)" : "var(--color-text-secondary)",
@@ -56,7 +56,7 @@ export default function SettingsPage() {
       </div>
 
       <div
-        className="max-w-lg rounded-xl p-5 mb-4 flex items-center justify-between gap-4"
+        className="max-w-lg rounded-xl p-5 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
         style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
       >
         <h2 className="text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>Date &amp; time format:</h2>
