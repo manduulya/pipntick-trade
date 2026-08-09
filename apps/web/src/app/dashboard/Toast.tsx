@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 export default function Toast({ message, onDismiss }: { message: string | null; onDismiss: () => void }) {
@@ -9,6 +9,15 @@ export default function Toast({ message, onDismiss }: { message: string | null; 
     const timer = setTimeout(onDismiss, 3000);
     return () => clearTimeout(timer);
   }, [message, onDismiss]);
+
+  // document.body doesn't exist during Next.js's build-time prerendering pass (a "use client"
+  // page's initial render still runs once in a Node environment) — referencing it unconditionally
+  // crashed the production build with "ReferenceError: document is not defined". Only portal once
+  // mounted client-side; renders nothing for that one server/build pass instead (a toast is never
+  // visible on first paint anyway, so there's no flash to worry about).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
 
   // Portaled to document.body rather than rendered in place: several callers (e.g.
   // DayTradesModal) render this inside a modal card that has its own `transform` for its
