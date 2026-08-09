@@ -12,8 +12,14 @@ import { quoteRoutes } from "./routes/quote.js";
 const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
 
 async function start() {
+  // Comma-separated so the same web app served from multiple origins (e.g. apex + www) can
+  // both call the API without a code change — CORS_ORIGIN=https://a.com,https://b.com.
+  const corsOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
   await app.register(cors, {
-    origin: process.env.CORS_ORIGIN ?? "http://localhost:3000",
+    origin: corsOrigins,
   });
 
   app.get("/health", async () => ({ status: "ok" }));
