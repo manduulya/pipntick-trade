@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import type { ParsedTradeScreenshot, Trade } from "@pipntick/shared";
 import { useParseTradeScreenshot, useTrades } from "../../lib/hooks";
 import { useSelectedAccount } from "../../lib/account-context";
-import { computeDashboardStats, computeMonthCalendar, isClosed } from "../../lib/trade-utils";
+import { computeDashboardStats, computeMonthCalendar, isClosed, utcWallClock } from "../../lib/trade-utils";
 import { ApiError } from "../../lib/api";
 import { useTheme } from "../../lib/theme-context";
 import EmptyAccountsState from "./EmptyAccountsState";
@@ -255,7 +255,7 @@ function UploadZone({
   );
 }
 
-function TradeEntryPanel({ onClose }: { onClose: () => void }) {
+function TradeEntryPanel({ onClose, onSaved }: { onClose: () => void; onSaved: (message: string) => void }) {
   const { theme } = useTheme();
   // White-tint hover overlay only reads as a highlight against a dark surface — flip to a dark
   // tint in light mode, where it'd otherwise be invisible.
@@ -263,7 +263,6 @@ function TradeEntryPanel({ onClose }: { onClose: () => void }) {
   const [method, setMethod] = useState<EntryMethod>("manual");
   const [prefill, setPrefill] = useState<ParsedTradeScreenshot | null>(null);
   const [prefillKey, setPrefillKey] = useState(0);
-  const [toast, setToast] = useState<string | null>(null);
 
   function handleParsed(parsed: ParsedTradeScreenshot) {
     setPrefill(parsed);
@@ -318,8 +317,7 @@ function TradeEntryPanel({ onClose }: { onClose: () => void }) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-3">
-        <Toast message={toast} onDismiss={() => setToast(null)} />
-        {method === "manual"     && <TradeForm key={prefillKey} prefill={prefill} onSaved={setToast} />}
+        {method === "manual"     && <TradeForm key={prefillKey} prefill={prefill} onSaved={onSaved} onDone={onClose} />}
         {method === "screenshot" && (
           <UploadZone
             accept="image/*"
@@ -335,7 +333,7 @@ function TradeEntryPanel({ onClose }: { onClose: () => void }) {
 
 // Wraps TradeEntryPanel as a modal — same fade+scale transition shape as every other modal in
 // the app (AddAccountModal etc.). Used at every breakpoint; there's no inline desktop variant.
-function AddTradeModal({ onClose }: { onClose: () => void }) {
+function AddTradeModal({ onClose, onSaved }: { onClose: () => void; onSaved: (message: string) => void }) {
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
 
@@ -363,7 +361,7 @@ function AddTradeModal({ onClose }: { onClose: () => void }) {
           transition: "opacity 0.3s ease, transform 0.3s ease",
         }}
       >
-        <TradeEntryPanel onClose={handleClose} />
+        <TradeEntryPanel onClose={handleClose} onSaved={onSaved} />
       </div>
     </div>
   );
@@ -379,6 +377,11 @@ export default function DashboardPage() {
   const [calendarOffset, setCalendarOffset] = useState(0);
   const [showAddTrade, setShowAddTrade] = useState(false);
   const [selectedDay, setSelectedDay] = useState<{ year: number; month: number; day: number } | null>(null);
+  // Owned here rather than inside AddTradeModal/TradeEntryPanel: the modal closes itself the
+  // moment a trade is saved now, so a toast living inside it would unmount along with it before
+  // its own 3s auto-dismiss timer ever finished — same "lift state to survive the modal" pattern
+  // Journal already uses.
+  const [toast, setToast] = useState<string | null>(null);
 
   const closed = useMemo(() => (trades ?? []).filter(isClosed), [trades]);
   const dashboardStats = useMemo(() => computeDashboardStats(closed), [closed]);
@@ -391,13 +394,13 @@ export default function DashboardPage() {
     [trades, viewed],
   );
 
-  // Same bucketing rule as computeMonthCalendar (local-date getters, closed trades only) so this
+  // Same bucketing rule as computeMonthCalendar (UTC wall-clock day, closed trades only) so this
   // list always matches the count shown on the calendar tile that opened it.
   const selectedDayTrades = useMemo<Trade[]>(() => {
     if (!selectedDay) return [];
     return (trades ?? []).filter((t) => {
       if (t.pnl === null) return false;
-      const d = new Date(t.entryTime);
+      const d = utcWallClock(t.entryTime);
       return d.getFullYear() === selectedDay.year && d.getMonth() === selectedDay.month && d.getDate() === selectedDay.day;
     });
   }, [trades, selectedDay]);
@@ -485,7 +488,8 @@ export default function DashboardPage() {
         />
       </div>
 
-      {showAddTrade && <AddTradeModal onClose={() => setShowAddTrade(false)} />}
+      <Toast message={toast} onDismiss={() => setToast(null)} />
+      {showAddTrade && <AddTradeModal onClose={() => setShowAddTrade(false)} onSaved={setToast} />}
       {selectedDay && (
         <DayTradesModal
           trades={selectedDayTrades}

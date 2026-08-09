@@ -9,7 +9,7 @@ import { ApiError } from "../../../lib/api";
 
 // Shared by Journal's row actions and Dashboard's day-trades popup — same confirm-delete chrome
 // either way.
-export default function DeleteTradeModal({ trade, onClose }: { trade: Trade; onClose: () => void }) {
+export default function DeleteTradeModal({ trade, onClose, onSaved }: { trade: Trade; onClose: () => void; onSaved: (message: string) => void }) {
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
 
@@ -25,7 +25,10 @@ export default function DeleteTradeModal({ trade, onClose }: { trade: Trade; onC
   function handleConfirm() {
     setFormError(null);
     deleteTrade.mutate(trade.id, {
-      onSuccess: handleClose,
+      onSuccess: () => {
+        onSaved("Trade deleted successfully");
+        handleClose();
+      },
       onError: (err) => {
         setFormError(err instanceof ApiError ? err.message : "Failed to delete trade.");
       },

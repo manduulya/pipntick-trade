@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Trade } from "@pipntick/shared";
 import {
   computeCharts,
@@ -112,6 +112,23 @@ describe("filterByPeriod", () => {
     ];
     const result = filterByPeriod(trades, "yearly", 0);
     expect(result.map((t) => t.id)).toEqual(["in"]);
+  });
+
+  it("includes a trade entered at UTC midnight on the 1st in that UTC month, even behind UTC", () => {
+    const originalTZ = process.env.TZ;
+    process.env.TZ = "America/New_York"; // UTC-4/-5
+    vi.useFakeTimers();
+    // Pinned mid-month so "now" isn't itself near a month boundary — this test is only about the
+    // trade's own UTC wall-clock day, not about how "this month" is defined for the viewer.
+    vi.setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
+    try {
+      const trade = makeTrade({ entryTime: "2026-08-01T00:00:00.000Z", pnl: "10.00" });
+      const result = filterByPeriod([trade], "monthly", 0);
+      expect(result).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+      process.env.TZ = originalTZ;
+    }
   });
 });
 
@@ -261,6 +278,25 @@ describe("computeMonthCalendar", () => {
     const calendar = computeMonthCalendar(trades, 2026, 2); // March = month index 2
     expect(calendar[5]).toEqual({ trades: 2, pnl: 15 });
     expect(calendar[6]).toBeUndefined();
+  });
+
+  // entryTime is entered and stored as literal UTC wall-clock digits (TradeForm appends "Z" to
+  // whatever was typed, regardless of the trader's real timezone), not a timezone-aware instant.
+  // A trade entered as midnight UTC on the 4th is 8pm on the 3rd in any timezone behind UTC, so
+  // reading it with plain local Date getters used to silently shift it back a day for most of the
+  // Americas. Runs under a real timezone offset (not just UTC, which is this machine's default and
+  // wouldn't have caught the bug) to prove the fix actually corrects for it.
+  it("buckets a trade by its UTC wall-clock day even in a timezone behind UTC", () => {
+    const originalTZ = process.env.TZ;
+    process.env.TZ = "America/New_York"; // UTC-4/-5
+    try {
+      const trade = makeTrade({ entryTime: "2026-08-04T00:00:00.000Z", pnl: "15.00" });
+      const calendar = computeMonthCalendar([trade], 2026, 7); // August = month index 7
+      expect(calendar[4]).toEqual({ trades: 1, pnl: 15 });
+      expect(calendar[3]).toBeUndefined();
+    } finally {
+      process.env.TZ = originalTZ;
+    }
   });
 });
 

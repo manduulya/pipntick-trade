@@ -44,15 +44,15 @@ export default function DateTimeFormatSelect({
   const selected = DATE_TIME_FORMAT_OPTIONS.find((o) => o.value === value) ?? DATE_TIME_FORMAT_OPTIONS[0];
 
   return (
-    <div className="relative" ref={rootRef}>
+    <div className="relative w-full sm:w-auto" ref={rootRef}>
       <button
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="true"
         aria-expanded={open}
-        className="focus-ring press-scale flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-lg text-left"
-        style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)", minWidth: 260 }}
+        className="focus-ring press-scale flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-lg text-left w-full sm:w-auto sm:min-w-[260px]"
+        style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}
       >
         <div className="flex flex-col min-w-0 flex-1">
           <span className="text-xs font-semibold truncate" style={{ color: "var(--color-text-primary)" }}>{formatDateTime(previewValue, selected.value)}</span>

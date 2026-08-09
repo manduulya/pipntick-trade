@@ -444,7 +444,7 @@ export default function JournalPage() {
       </div>
       {showModal && <AddTradeModal onClose={() => setShowModal(false)} onSaved={setToast} />}
       {editingTrade && <AddTradeModal trade={editingTrade} onClose={() => setEditingTrade(null)} onSaved={setToast} />}
-      {deletingTrade && <DeleteTradeModal trade={deletingTrade} onClose={() => setDeletingTrade(null)} />}
+      {deletingTrade && <DeleteTradeModal trade={deletingTrade} onClose={() => setDeletingTrade(null)} onSaved={setToast} />}
       <Toast message={toast} onDismiss={() => setToast(null)} />
     </div>
   );
