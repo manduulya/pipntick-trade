@@ -65,6 +65,22 @@ export function toDatetimeLocal(value: string | null | undefined): string {
   return value ? value.slice(0, 16) : "";
 }
 
+// Screenshot OCR transcribes trade times verbatim in whatever timezone the broker platform's
+// server displays (see ParsedTradeScreenshot's doc comment) — not UTC. If the account has a
+// known broker-server UTC offset configured, shift the OCR'd digits back to a true UTC instant
+// before they land in these (UTC-labeled) fields; otherwise fall through unchanged, matching the
+// pre-existing "treat it as literal UTC" behavior for accounts that haven't set one.
+export function shiftBrokerTimeToUtc(
+  value: string | null | undefined,
+  offsetMinutes: number | null | undefined,
+): string | null | undefined {
+  if (!value || !offsetMinutes) return value;
+  const instant = new Date(`${value}Z`);
+  if (Number.isNaN(instant.getTime())) return value;
+  instant.setUTCMinutes(instant.getUTCMinutes() - offsetMinutes);
+  return instant.toISOString();
+}
+
 // numeric(18,8) columns (entryPrice/exitPrice/lotSize) round-trip from Postgres padded to 8
 // decimals (e.g. "4347.33000000"). Strip the padding for display without truncating any real
 // precision someone actually entered.
@@ -108,8 +124,12 @@ export function TradeForm({
   const [exitPrice, setExitPrice] = useState(
     trade ? trimTrailingZeros(trade.exitPrice) : prefill?.exitPrice != null ? String(prefill.exitPrice) : ""
   );
-  const [entryDateTime, setEntryDateTime] = useState(toDatetimeLocal(trade?.entryTime ?? prefill?.entryDateTime));
-  const [exitDateTime, setExitDateTime] = useState(toDatetimeLocal(trade?.exitTime ?? prefill?.exitDateTime));
+  const [entryDateTime, setEntryDateTime] = useState(
+    toDatetimeLocal(trade?.entryTime ?? shiftBrokerTimeToUtc(prefill?.entryDateTime, selectedAccount?.brokerUtcOffsetMinutes)),
+  );
+  const [exitDateTime, setExitDateTime] = useState(
+    toDatetimeLocal(trade?.exitTime ?? shiftBrokerTimeToUtc(prefill?.exitDateTime, selectedAccount?.brokerUtcOffsetMinutes)),
+  );
   const [lotSize, setLotSize] = useState(
     trade ? trimTrailingZeros(trade.lotSize) : prefill?.lotSize != null ? String(prefill.lotSize) : ""
   );

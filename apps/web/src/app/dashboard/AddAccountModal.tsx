@@ -30,6 +30,7 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
   const [currency, setCurrency] = useState("USD");
   const [startingBalance, setStartingBalance] = useState("");
   const [createdAt, setCreatedAt] = useState(today);
+  const [brokerUtcOffsetHours, setBrokerUtcOffsetHours] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   const createAccount = useCreateAccount();
@@ -65,6 +66,7 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
         currency: currency.trim() || undefined,
         startingBalance: startingBalance ? Number(startingBalance) : undefined,
         createdAt: new Date(createdAt).toISOString(),
+        brokerUtcOffsetMinutes: brokerUtcOffsetHours.trim() === "" ? null : Math.round(Number(brokerUtcOffsetHours) * 60),
       },
       {
         onSuccess: (account) => {
@@ -128,6 +130,13 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
           <div className="flex flex-col gap-1">
             <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Account Created Date</label>
             <input type="date" max={today} value={createdAt} onChange={(e) => setCreatedAt(e.target.value)} style={inputStyle} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Broker Server Timezone (UTC offset, optional)</label>
+            <input type="number" step="0.5" placeholder="e.g. 3 for UTC+3" value={brokerUtcOffsetHours} onChange={(e) => setBrokerUtcOffsetHours(e.target.value)} style={inputStyle} />
+            <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+              Check your platform&apos;s server time (e.g. in MT4/5, Market Watch). Used to auto-convert screenshot-imported trade times to UTC — leave blank if unsure.
+            </p>
           </div>
 
           {formError && (

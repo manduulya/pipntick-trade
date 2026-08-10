@@ -10,6 +10,7 @@ type CreateAccountBody = {
   currency?: string;
   startingBalance?: number;
   createdAt?: string;
+  brokerUtcOffsetMinutes?: number | null;
 };
 
 export async function accountRoutes(app: FastifyInstance) {
@@ -50,6 +51,7 @@ export async function accountRoutes(app: FastifyInstance) {
         currency: body.currency ?? "USD",
         startingBalance: body.startingBalance !== undefined ? String(body.startingBalance) : "0",
         isDefault: false,
+        brokerUtcOffsetMinutes: body.brokerUtcOffsetMinutes ?? null,
         ...(createdAt !== undefined ? { createdAt } : {}),
       })
       .returning();
@@ -98,6 +100,8 @@ export async function accountRoutes(app: FastifyInstance) {
         broker: body.broker !== undefined ? body.broker : existing.broker,
         currency: body.currency ?? existing.currency,
         startingBalance: body.startingBalance !== undefined ? String(body.startingBalance) : existing.startingBalance,
+        brokerUtcOffsetMinutes:
+          body.brokerUtcOffsetMinutes !== undefined ? body.brokerUtcOffsetMinutes : existing.brokerUtcOffsetMinutes,
         createdAt,
         updatedAt: new Date(),
       })
