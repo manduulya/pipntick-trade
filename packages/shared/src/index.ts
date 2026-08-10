@@ -12,6 +12,9 @@ export interface TradingAccount {
   currency: string;
   startingBalance: string;
   isDefault: boolean;
+  /** Broker platform's server timezone as an offset from UTC in minutes (e.g. 180 for UTC+3).
+   * Null = unset, meaning screenshot-imported times are treated as literal UTC (legacy behavior). */
+  brokerUtcOffsetMinutes: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -70,6 +73,9 @@ export interface CreateAccountInput {
   /** ISO date/time string — when account history should start counting from. Optional on both
    * create and update; defaults to now if omitted at creation. */
   createdAt?: string;
+  /** Broker platform's server timezone as an offset from UTC in minutes (e.g. 180 for UTC+3).
+   * Omit/undefined leaves it unchanged (update) or unset (create); pass null to explicitly clear it. */
+  brokerUtcOffsetMinutes?: number | null;
 }
 
 export interface CreateTradeInput {
