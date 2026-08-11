@@ -6,12 +6,14 @@ import { useDeleteTrade } from "../../../lib/hooks";
 import { useTimeFormat } from "../../../lib/time-format-context";
 import { formatDate } from "../../../lib/time-format";
 import { ApiError } from "../../../lib/api";
+import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
 
 // Shared by Journal's row actions and Dashboard's day-trades popup — same confirm-delete chrome
 // either way.
 export default function DeleteTradeModal({ trade, onClose, onSaved }: { trade: Trade; onClose: () => void; onSaved: (message: string) => void }) {
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
+  useLockBodyScroll();
 
   const [formError, setFormError] = useState<string | null>(null);
   const deleteTrade = useDeleteTrade();

@@ -8,6 +8,7 @@ import { formatDate, formatDateTime } from "../../../lib/time-format";
 import { TradeForm } from "./TradeForm";
 import DeleteTradeModal from "./DeleteTradeModal";
 import Toast from "../Toast";
+import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
 
 // Opened from a MonthlyCalendar day cell that has trades recorded — same journal-style detail
 // fields as the Journal table/expanded row, just scoped to one day instead of the whole account.
@@ -29,6 +30,7 @@ export default function DayTradesModal({
 }) {
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
+  useLockBodyScroll();
 
   const { timeFormat } = useTimeFormat();
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);

@@ -221,6 +221,29 @@ html {
   animation-timing-function: ease;
 }
 
+/* Thin, theme-colored scrollbar for internally-scrolling modal bodies and dropdown panels — the
+   OS default (esp. Windows' non-overlay scrollbar, with its wide track and up/down arrow
+   buttons) clashes with the app's flat, custom-drawn chrome. Opt-in via .thin-scrollbar rather
+   than applied globally, since most scrollable areas in the app (Journal table, page content)
+   are full-bleed and fine with the browser default. */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-hover) transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--color-border-hover);
+  border-radius: 3px;
+}
+
 /* Respect the OS-level motion preference across the app — neutralizes both CSS transitions/
    animations and the inline-style transitions used by hand-rolled fades (e.g. QuoteBar,
    PageTransition), since author-stylesheet !important beats an inline style without one. */

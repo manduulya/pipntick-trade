@@ -13,6 +13,7 @@ import { useTimeFormat } from "../../../lib/time-format-context";
 import { formatDate } from "../../../lib/time-format";
 import { TradeForm, type EntryMethod, entryTabs } from "../_components/TradeForm";
 import DeleteTradeModal from "../_components/DeleteTradeModal";
+import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
 
 type SortKey = "date" | "instrument" | "direction" | "pnl" | "duration";
 type SortDir = "asc" | "desc";
@@ -79,6 +80,7 @@ function AddTradeModal({ trade, onClose, onSaved }: { trade?: Trade; onClose: ()
 
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
+  useLockBodyScroll();
 
   function handleClose() {
     setVisible(false);
