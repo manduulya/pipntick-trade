@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { TradingAccount } from "@pipntick/shared";
 import { useDeleteTradingAccount } from "../../lib/hooks";
 import { ApiError } from "../../lib/api";
+import { useLockBodyScroll } from "../../lib/use-lock-body-scroll";
 
 export default function DeleteTradingAccountModal({
   account,
@@ -16,6 +17,7 @@ export default function DeleteTradingAccountModal({
 }) {
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
+  useLockBodyScroll();
 
   const [formError, setFormError] = useState<string | null>(null);
   const deleteAccount = useDeleteTradingAccount();

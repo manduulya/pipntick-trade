@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useCreateAccount } from "../../lib/hooks";
 import { useSelectedAccount } from "../../lib/account-context";
 import { ApiError } from "../../lib/api";
+import { useLockBodyScroll } from "../../lib/use-lock-body-scroll";
+import BrokerTimezoneField from "./BrokerTimezoneField";
 
 const inputStyle: React.CSSProperties = {
   backgroundColor: "var(--color-bg-base)",
@@ -19,6 +22,7 @@ const inputStyle: React.CSSProperties = {
 export default function AddAccountModal({ onClose }: { onClose: () => void }) {
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
+  useLockBodyScroll();
 
   // Local calendar date, to match the local-date semantics of <input type="date">'s value
   // (toISOString() would give the UTC date, which is off by a day in some timezones).
@@ -80,7 +84,7 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
     );
   }
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{
@@ -108,7 +112,7 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3 px-5 py-4 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="thin-scrollbar flex flex-col gap-3 px-5 py-4 overflow-y-auto">
           <div className="flex flex-col gap-1">
             <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Account Name</label>
             <input type="text" placeholder="e.g. Prop Firm Challenge" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
@@ -131,13 +135,7 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
             <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Account Created Date</label>
             <input type="date" max={today} value={createdAt} onChange={(e) => setCreatedAt(e.target.value)} style={inputStyle} />
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Broker Server Timezone (UTC offset, optional)</label>
-            <input type="number" step="0.5" placeholder="e.g. 3 for UTC+3" value={brokerUtcOffsetHours} onChange={(e) => setBrokerUtcOffsetHours(e.target.value)} style={inputStyle} />
-            <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-              Check your platform&apos;s server time (e.g. in MT4/5, Market Watch). Used to auto-convert screenshot-imported trade times to UTC — leave blank if unsure.
-            </p>
-          </div>
+          <BrokerTimezoneField value={brokerUtcOffsetHours} onChange={setBrokerUtcOffsetHours} />
 
           {formError && (
             <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>{formError}</p>
@@ -157,6 +155,7 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
           </button>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

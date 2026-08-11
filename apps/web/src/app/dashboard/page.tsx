@@ -11,6 +11,7 @@ import EmptyAccountsState from "./EmptyAccountsState";
 import Toast from "./Toast";
 import { TradeForm, type EntryMethod, entryTabs } from "./_components/TradeForm";
 import DayTradesModal from "./_components/DayTradesModal";
+import { useLockBodyScroll } from "../../lib/use-lock-body-scroll";
 
 function fmtPnl(pnl: number) {
   const str = `$${Math.abs(pnl).toFixed(2)}`;
@@ -336,6 +337,7 @@ function TradeEntryPanel({ onClose, onSaved }: { onClose: () => void; onSaved: (
 function AddTradeModal({ onClose, onSaved }: { onClose: () => void; onSaved: (message: string) => void }) {
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
+  useLockBodyScroll();
 
   function handleClose() {
     setVisible(false);

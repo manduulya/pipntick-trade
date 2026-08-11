@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
 import { useDeleteAccount } from "../../../lib/hooks";
 import { ApiError } from "../../../lib/api";
+import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
 
 const inputStyle: React.CSSProperties = {
   backgroundColor: "var(--color-bg-base)",
@@ -20,6 +21,7 @@ const inputStyle: React.CSSProperties = {
 export default function DeleteAccountModal({ onClose }: { onClose: () => void }) {
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
+  useLockBodyScroll();
 
   const [confirmText, setConfirmText] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
