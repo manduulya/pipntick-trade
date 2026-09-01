@@ -33,9 +33,14 @@ export default function DateTimePicker({
   const { timeFormat } = useTimeFormat();
   const twelveHour = usesTwelveHour(timeFormat);
   const [open, setOpen] = useState(false);
+  // `open` is the user's intent; `mounted` keeps the panel in the DOM through its exit animation
+  // after `open` flips false, and `shown` is the flag the enter/exit transition actually reads
+  // (toggled a frame after mount so the browser has an initial state to animate from).
+  const [mounted, setMounted] = useState(false);
+  const [shown, setShown] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const PANEL_WIDTH = 232;
+  const PANEL_WIDTH = 288;
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
 
   const [datePart, timePart] = value ? (value.split("T") as [string, string]) : ["", ""];
@@ -50,6 +55,25 @@ export default function DateTimePicker({
   // Only meaningful when twelveHour is true — the stored value is always 24h internally
   // regardless of display format, same "HH:mm" shape <input type="datetime-local"> used.
   const [period, setPeriod] = useState<"AM" | "PM">("AM");
+
+  // Drive the open/close animation: mount immediately on open, then unmount one transition-length
+  // later on close so the exit animation can play. `shown` flips a frame after mount (and
+  // synchronously on close) so there's always a from-state for the transition to run against.
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      return;
+    }
+    setShown(false);
+    const t = setTimeout(() => setMounted(false), 150);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, [mounted]);
 
   // Refresh the calendar's viewed month and the time buffer from the current value (and current
   // format) every time the popover opens — not continuously, so it doesn't fight the user
@@ -177,16 +201,16 @@ export default function DateTimePicker({
     border: "1px solid var(--color-border)",
     color: "var(--color-text-primary)",
     borderRadius: 6,
-    fontSize: 11,
+    fontSize: 13,
     textAlign: "center",
-    width: 30,
-    padding: "3px 0",
+    width: 40,
+    padding: "5px 0",
     outline: "none",
   };
 
   return (
     <div ref={containerRef} className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="flex items-center justify-between w-full text-left" style={style}>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex items-center justify-between w-full text-left cursor-pointer" style={style}>
         <span style={{ color: displayValue ? undefined : "var(--color-text-disabled)" }}>
           {displayValue || placeholder}
         </span>
@@ -196,10 +220,10 @@ export default function DateTimePicker({
         </svg>
       </button>
 
-      {open && coords && createPortal(
+      {mounted && coords && createPortal(
         <div
           ref={panelRef}
-          className="fixed z-50 rounded-lg p-3 flex flex-col gap-2"
+          className="fixed z-50 rounded-lg p-4 flex flex-col gap-3"
           style={{
             top: coords.top,
             left: coords.left,
@@ -207,6 +231,10 @@ export default function DateTimePicker({
             border: "1px solid var(--color-border)",
             boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
             width: PANEL_WIDTH,
+            transformOrigin: "top",
+            opacity: shown ? 1 : 0,
+            transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.97)",
+            transition: "opacity 0.15s ease, transform 0.15s ease",
           }}
         >
           {/* Month header */}
@@ -214,26 +242,26 @@ export default function DateTimePicker({
             <button
               type="button"
               onClick={() => setViewedMonth((m) => { if (m === 0) { setViewedYear((y) => y - 1); return 11; } return m - 1; })}
-              className="p-0.5 rounded hover:opacity-70"
+              className="p-0.5 rounded hover:opacity-70 cursor-pointer"
               style={{ color: "var(--color-text-secondary)" }}
             >
-              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
-            <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)" }}>{monthName} {viewedYear}</span>
+            <span className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>{monthName} {viewedYear}</span>
             <button
               type="button"
               onClick={() => setViewedMonth((m) => { if (m === 11) { setViewedYear((y) => y + 1); return 0; } return m + 1; })}
-              className="p-0.5 rounded hover:opacity-70"
+              className="p-0.5 rounded hover:opacity-70 cursor-pointer"
               style={{ color: "var(--color-text-secondary)" }}
             >
-              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
             </button>
           </div>
 
           {/* Day-of-week headers */}
           <div className="grid grid-cols-7">
             {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-              <div key={i} className="text-center text-[9px] font-medium" style={{ color: "var(--color-text-muted)" }}>{d}</div>
+              <div key={i} className="text-center text-[11px] font-medium" style={{ color: "var(--color-text-muted)" }}>{d}</div>
             ))}
           </div>
 
@@ -249,57 +277,64 @@ export default function DateTimePicker({
                   type="button"
                   disabled={disabled}
                   onClick={() => selectDay(day)}
-                  className="text-[10px] rounded py-1 disabled:cursor-not-allowed"
+                  className="dtp-day text-xs rounded py-1.5 cursor-pointer disabled:cursor-not-allowed"
                   style={{
                     backgroundColor: selected ? "var(--color-green-primary)" : "transparent",
                     color: disabled ? "var(--color-text-disabled)" : selected ? "var(--color-on-primary)" : "var(--color-text-secondary)",
                     opacity: disabled ? 0.5 : 1,
                   }}
                 >
-                  {day}
+                  {!disabled && !selected && (
+                    <svg className="dtp-day-ring" viewBox="0 0 32 32" aria-hidden="true">
+                      <circle cx="16" cy="16" r="14" />
+                    </svg>
+                  )}
+                  <span className="dtp-day-num">{day}</span>
                 </button>
               );
             })}
           </div>
 
           {/* Time */}
-          <div className="flex items-center gap-1.5 pt-2" style={{ borderTop: "1px solid var(--color-border)" }}>
-            <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Time</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder={twelveHour ? "H" : "HH"}
-              value={hourInput}
-              onKeyDown={preventEnterSubmit}
-              onChange={(e) => { const v = digitsOnly(e.target.value, 2); setHourInput(v); commitTime(v, minuteInput); }}
-              style={timeInputStyle}
-            />
-            <span style={{ color: "var(--color-text-muted)" }}>:</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="MM"
-              value={minuteInput}
-              onKeyDown={preventEnterSubmit}
-              onChange={(e) => { const v = digitsOnly(e.target.value, 2); setMinuteInput(v); commitTime(hourInput, v); }}
-              style={timeInputStyle}
-            />
-            {twelveHour && (
-              <button
-                type="button"
-                onClick={() => { const next = period === "AM" ? "PM" : "AM"; setPeriod(next); commitTime(hourInput, minuteInput, next); }}
-                className="text-[10px] font-semibold rounded px-1.5 py-1"
-                style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
-              >
-                {period}
-              </button>
-            )}
-            <span className="text-[9px]" style={{ color: "var(--color-text-muted)" }}>UTC</span>
+          <div className="flex flex-col gap-2 pt-2" style={{ borderTop: "1px solid var(--color-border)" }}>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>Time</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder={twelveHour ? "H" : "HH"}
+                value={hourInput}
+                onKeyDown={preventEnterSubmit}
+                onChange={(e) => { const v = digitsOnly(e.target.value, 2); setHourInput(v); commitTime(v, minuteInput); }}
+                style={timeInputStyle}
+              />
+              <span style={{ color: "var(--color-text-muted)" }}>:</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="MM"
+                value={minuteInput}
+                onKeyDown={preventEnterSubmit}
+                onChange={(e) => { const v = digitsOnly(e.target.value, 2); setMinuteInput(v); commitTime(hourInput, v); }}
+                style={timeInputStyle}
+              />
+              {twelveHour && (
+                <button
+                  type="button"
+                  onClick={() => { const next = period === "AM" ? "PM" : "AM"; setPeriod(next); commitTime(hourInput, minuteInput, next); }}
+                  className="text-xs font-semibold rounded px-2 py-1.5 cursor-pointer"
+                  style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
+                >
+                  {period}
+                </button>
+              )}
+              <span className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>UTC</span>
+            </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="ml-auto text-[10px] font-semibold px-2 py-1 rounded hover:opacity-70"
-              style={{ color: "var(--color-green-primary)" }}
+              className="w-full text-sm font-semibold py-2.5 rounded hover:opacity-90 cursor-pointer"
+              style={{ backgroundColor: "var(--color-green-primary)", color: "var(--color-on-primary)" }}
             >
               Done
             </button>

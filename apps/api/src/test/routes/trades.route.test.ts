@@ -137,6 +137,40 @@ describe("POST /api/trades", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it("returns 400 when exitTime is earlier than entryTime", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/trades",
+      payload: {
+        symbol: "EUR/USD",
+        direction: "long",
+        entryPrice: 1.1,
+        exitPrice: 1.105,
+        lotSize: 1,
+        entryTime: "2026-03-15T22:00:00.000Z",
+        exitTime: "2026-03-15T02:00:00.000Z",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 400 when entryTime is in the future", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/trades",
+      payload: {
+        symbol: "EUR/USD",
+        direction: "long",
+        entryPrice: 1.1,
+        lotSize: 1,
+        entryTime: new Date(Date.now() + 86_400_000).toISOString(),
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it("returns 404 when the requested accountId isn't owned by the caller", async () => {
     setSelectResult([]); // account ownership lookup finds nothing
     const app = await buildApp();
@@ -265,6 +299,64 @@ describe("PATCH /api/trades/:id", () => {
     const updated = getLastUpdateSet() as any;
     expect(updated.status).toBe("closed");
     expect(Number(updated.pnl)).toBeCloseTo(500);
+  });
+
+  it("returns 400 when a patched exitTime predates the existing entryTime", async () => {
+    setSelectResult([
+      {
+        trade: {
+          id: "t1",
+          symbol: "EUR/USD",
+          direction: "long",
+          entryPrice: "1.1000",
+          exitPrice: null,
+          lotSize: "1",
+          swap: null,
+          commission: null,
+          entryTime: new Date("2026-03-15T22:00:00.000Z"),
+          exitTime: null,
+          session: "London",
+          notes: null,
+          screenshotUrl: null,
+        },
+      },
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/trades/t1",
+      payload: { exitPrice: 1.105, exitTime: "2026-03-15T02:00:00.000Z" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 400 when a patched entryTime is in the future", async () => {
+    setSelectResult([
+      {
+        trade: {
+          id: "t1",
+          symbol: "EUR/USD",
+          direction: "long",
+          entryPrice: "1.1000",
+          exitPrice: null,
+          lotSize: "1",
+          swap: null,
+          commission: null,
+          entryTime: new Date("2026-03-15T10:00:00.000Z"),
+          exitTime: null,
+          session: "London",
+          notes: null,
+          screenshotUrl: null,
+        },
+      },
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/trades/t1",
+      payload: { entryTime: new Date(Date.now() + 86_400_000).toISOString() },
+    });
+    expect(res.statusCode).toBe(400);
   });
 });
 

@@ -31,19 +31,25 @@ pnpm workspaces + Turborepo. TypeScript throughout.
 Auth is Clerk, wired on both sides:
 - `apps/api` registers `@clerk/fastify`'s `clerkPlugin` and guards every `/api/*` route through `getUserId(request)` (`apps/api/src/lib/auth.ts`) — **but only when `CLERK_SECRET_KEY` is set**. Without it, `registerAuth()` skips `clerkPlugin` entirely and every request is attributed to a fixed `DEV_USER_ID` (default `"user_dev_001"`) instead, with a startup warning logged. This is a local-dev-only escape hatch so the API is usable before real Clerk keys exist — it activates automatically (never in a real deployment, where the key is set) and is not something to "clean up". `/health` is registered outside the auth scope entirely, so it stays up regardless of Clerk config.
 - `apps/web` wraps the root layout in `ClerkProvider` (`apps/web/src/app/layout.tsx`) and gates `/dashboard/*` via `clerkMiddleware()` in `apps/web/src/middleware.ts`. `/login` and `/register` use `useSignIn()`/`useSignUp()` directly against the existing hand-styled forms (no Clerk prebuilt `<SignIn />`/`<SignUp />` components) — `/register` is a two-stage flow (details, then an email verification code) since Clerk requires email verification by default. `apps/web/src/lib/api.ts`'s `request()` takes a `token: string | null` first/second argument and sets `Authorization: Bearer <token>`; `apps/web/src/lib/hooks.ts` resolves that token per-call via `useAuth().getToken()`. The dashboard sidebar shows the real signed-in user via `useUser()` and has a working sign-out button via `useClerk().signOut()`.
-- **Both sides require real Clerk keys to actually authenticate** — `apps/web/.env.local`'s `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `apps/api/.env`'s commented-out `CLERK_SECRET_KEY`/`CLERK_PUBLISHABLE_KEY` still hold placeholder values until a real Clerk app is created (clerk.com) with Email+Password and Name fields enabled. Until then, `apps/web` will fail to render (ClerkProvider throws on an invalid publishable key) and needs a real key before `pnpm dev` is usable at all — there's no web-side equivalent of the API's `DEV_USER_ID` bypass.
+- **Both sides require real Clerk keys to actually authenticate.** These are now filled in locally: `apps/web/.env.local` and `apps/api/.env` both carry real `pk_test_`/`sk_test_` keys for a dev Clerk app (`elegant-racer-15.clerk.accounts.dev`) with Email+Password and Name enabled, so `pnpm dev` renders and auth works. Neither `.env` file is committed (`.gitignore`), so a fresh clone still needs keys added from a Clerk app before the web app will render — there's no web-side equivalent of the API's `DEV_USER_ID` bypass (ClerkProvider throws on an invalid publishable key).
 
 Realtime (WebSockets + React Query — React Query itself is now wired for data fetching, but WebSocket realtime is not) is aspirational per the README; `@fastify/websocket` is an installed-but-unused dependency.
 
 ### Local database
 
-Postgres runs in Docker (Docker Desktop + WSL2, both now set up on this machine). Container isn't managed by docker-compose — it was started directly:
+Postgres runs in Docker (Docker Desktop, WSL2 backend). Managed by `docker-compose.yml` at the repo root (service `postgres`, container name `pipntick-postgres`, data in the named volume `pipntick-pgdata` so it survives `docker compose down`). Root `package.json` wraps it:
 
 ```bash
-docker run -d --name pipntick-postgres -e POSTGRES_USER=pipntick -e POSTGRES_PASSWORD=pipntick -e POSTGRES_DB=pipntick -p 5432:5432 postgres:16-alpine
+pnpm setup      # first run / fresh clone: pnpm install + db:up + db:push + db:seed
+pnpm dev:full   # db:up (idempotent) then turbo dev — the normal daily command
+pnpm db:up      # start Postgres, block until it passes its healthcheck
+pnpm db:down    # stop + remove the container (volume/data kept)
+pnpm db:reset   # down -v (wipe volume) + up + db:push + db:seed
 ```
 
-`packages/db/.env` and `apps/api/.env` both point `DATABASE_URL` at `postgresql://pipntick:pipntick@localhost:5432/pipntick`. If the container isn't running (`docker ps`), start it with `docker start pipntick-postgres`, then re-apply schema/seed from `packages/db/`:
+`pnpm db:up` runs `docker compose up -d --wait`, so schema/seed steps never race the container coming up. Docker Desktop still has to be running first.
+
+`packages/db/.env` and `apps/api/.env` both point `DATABASE_URL` at `postgresql://pipntick:pipntick@localhost:5432/pipntick` (matches the compose credentials). Schema/seed can also be run directly from `packages/db/`:
 
 ```bash
 pnpm db:push    # or db:generate + db:migrate
@@ -58,8 +64,8 @@ Without a reachable database, every `/api/*` route 500s with a Drizzle `ECONNREF
 
 - **pnpm isn't preinstalled** and `corepack enable`/`corepack prepare pnpm@latest --activate` fails here with `EPERM: operation not permitted, open 'C:\Program Files\nodejs\yarnpkg'` (a pre-existing yarn shim in a non-writable location). Fix used: `npm install -g pnpm` instead — installs fine and doesn't touch that shim.
 - **PowerShell blocked pnpm's shim script** (`pnpm.ps1 cannot be loaded because running scripts is disabled on this system`) because bare `pnpm` resolves to the `.ps1` shim before `pnpm.cmd`. Fixed permanently via `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` (user-scope only, no admin needed) — already applied on this machine, so plain `pnpm` works in any new terminal now.
-- **Docker Desktop must be started manually** before `docker start pipntick-postgres` will work — `docker ps` fails with a named-pipe error (`dockerDesktopLinuxEngine`) if the Desktop app isn't running yet.
-- `apps/web/.env.local` exists locally with just `NEXT_PUBLIC_API_URL=http://localhost:3001` — Clerk keys were intentionally left out since `apps/web` doesn't wire up Clerk yet (see auth note above) and the API's dev bypass doesn't need them.
+- **Docker Desktop must be started manually** before `pnpm db:up` will work — `docker ps` fails with a named-pipe error (`dockerDesktopLinuxEngine`) if the Desktop app isn't running yet.
+- `apps/web/.env.local` and `apps/api/.env` exist locally with real Clerk dev keys plus `DATABASE_URL`/`NEXT_PUBLIC_API_URL` (see auth + local-database notes above).
 - Python 3.13 (`Python.Python.3.13`) was installed via `winget` for the UI/UX Pro Max skill's search script — see below.
 
 ## Commands
@@ -68,10 +74,16 @@ Run from repo root (Turborepo fans these out per-package; use `--filter` to targ
 
 ```bash
 pnpm install                        # install all workspace deps
+pnpm setup                          # one-shot: install + start Postgres + push schema + seed
 
-pnpm dev                            # run web + api dev servers
+pnpm dev                            # run web + api dev servers (assumes DB already up)
+pnpm dev:full                       # start Postgres (if needed) then run web + api
 pnpm --filter @pipntick/web dev     # web only (port 3000)
 pnpm --filter @pipntick/api dev     # api only (port 3001)
+
+pnpm db:up                          # start the Postgres container, wait for healthcheck
+pnpm db:down                        # stop + remove it (data kept in the volume)
+pnpm db:reset                       # wipe volume, recreate, re-push schema, re-seed
 
 pnpm build                          # turbo build (web + api)
 pnpm lint                           # turbo lint (next lint, web only has a lint script)

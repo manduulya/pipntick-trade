@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CreateTradeInput, ParsedTradeScreenshot, Trade } from "@pipntick/shared";
 import { getContractSize } from "@pipntick/shared";
 import { useCreateTrade, useUpdateTrade } from "../../../lib/hooks";
@@ -114,7 +114,15 @@ export function TradeForm({
   // Both the input's native min/max (best-effort, browser-dependent) and an explicit submit-time
   // check below, since not every browser enforces datetime-local min/max in its picker UI.
   const minDateTime = selectedAccount ? toDatetimeLocal(selectedAccount.createdAt) : undefined;
-  const maxDateTime = toDatetimeLocal(new Date().toISOString());
+  // Slow tick so the "now" upper bound doesn't go stale while the form sits open — a form opened
+  // at 23:58 UTC would otherwise keep greying out "tomorrow" for the rest of the session even
+  // after midnight passes. The submit-time check below reads a fresh `new Date()` regardless.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 20_000);
+    return () => clearInterval(id);
+  }, []);
+  const maxDateTime = toDatetimeLocal(now.toISOString());
 
   const [direction, setDirection] = useState<"long" | "short">(trade?.direction ?? prefill?.direction ?? "long");
   const [symbol, setSymbol] = useState(trade?.symbol ?? prefill?.symbol ?? "");
@@ -209,6 +217,10 @@ export function TradeForm({
       setDateError({ field: "Exit Date & Time", message: exitDateIssue });
       return;
     }
+    if (exitDateTime && entryDateTime && new Date(`${exitDateTime}:00Z`) < new Date(`${entryDateTime}:00Z`)) {
+      setDateError({ field: "Exit Date & Time", message: "Can't be earlier than the entry date & time" });
+      return;
+    }
     setDateError(null);
 
     const input: CreateTradeInput = {
@@ -262,7 +274,7 @@ export function TradeForm({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Date & Time (UTC)</label><DateTimePicker min={minDateTime} max={maxDateTime} value={entryDateTime} onChange={(v) => { setEntryDateTime(v); clearMissing("Entry Date & Time"); setDateError(null); }} style={missingFields.includes("Entry Date & Time") || dateError?.field === "Entry Date & Time" ? missingInputStyle : inputStyle} /></div>
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Date & Time (UTC)</label><DateTimePicker min={minDateTime} max={maxDateTime} value={exitDateTime} onChange={(v) => { setExitDateTime(v); setDateError(null); }} style={dateError?.field === "Exit Date & Time" ? missingInputStyle : inputStyle} /></div>
+        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Date & Time (UTC)</label><DateTimePicker min={entryDateTime || minDateTime} max={maxDateTime} value={exitDateTime} onChange={(v) => { setExitDateTime(v); setDateError(null); }} style={dateError?.field === "Exit Date & Time" ? missingInputStyle : inputStyle} /></div>
       </div>
       <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
         <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Session</span>
