@@ -42,6 +42,10 @@ async function resolveAccountId(userId: string, requestedAccountId?: string) {
   return account?.id ?? null;
 }
 
+// Clock-skew grace for the "not in the future" checks below: a trade timestamped "just now" on
+// the client shouldn't 400 because the client's and this server's clocks differ by a few seconds.
+const FUTURE_TOLERANCE_MS = 2 * 60_000;
+
 export function computePnl(
   direction: TradeDirection,
   entryPrice: number,
@@ -74,6 +78,16 @@ export async function tradeRoutes(app: FastifyInstance) {
     const body = request.body as CreateTradeBody;
     if (!body?.symbol || !body?.direction || body.entryPrice === undefined || body.lotSize === undefined || !body.entryTime) {
       return reply.code(400).send({ error: "symbol, direction, entryPrice, lotSize, entryTime are required" });
+    }
+    if (body.exitTime && new Date(body.exitTime) < new Date(body.entryTime)) {
+      return reply.code(400).send({ error: "exitTime cannot be earlier than entryTime" });
+    }
+    const futureCutoff = Date.now() + FUTURE_TOLERANCE_MS;
+    if (new Date(body.entryTime).getTime() > futureCutoff) {
+      return reply.code(400).send({ error: "entryTime cannot be in the future" });
+    }
+    if (body.exitTime && new Date(body.exitTime).getTime() > futureCutoff) {
+      return reply.code(400).send({ error: "exitTime cannot be in the future" });
     }
 
     const accountId = await resolveAccountId(userId, body.accountId);
@@ -127,6 +141,21 @@ export async function tradeRoutes(app: FastifyInstance) {
 
     if (!existing) return reply.code(404).send({ error: "Trade not found" });
     const current = existing.trade;
+
+    const effectiveEntryTime = body.entryTime ? new Date(body.entryTime) : current.entryTime;
+    const effectiveExitTime = body.exitTime ? new Date(body.exitTime) : current.exitTime;
+    if (effectiveExitTime && effectiveExitTime < effectiveEntryTime) {
+      return reply.code(400).send({ error: "exitTime cannot be earlier than entryTime" });
+    }
+    // Only guard times the client is actually changing — an untouched past timestamp on a
+    // notes-only patch must still pass.
+    const futureCutoff = Date.now() + FUTURE_TOLERANCE_MS;
+    if (body.entryTime && effectiveEntryTime.getTime() > futureCutoff) {
+      return reply.code(400).send({ error: "entryTime cannot be in the future" });
+    }
+    if (body.exitTime && effectiveExitTime && effectiveExitTime.getTime() > futureCutoff) {
+      return reply.code(400).send({ error: "exitTime cannot be in the future" });
+    }
 
     const symbol = body.symbol ?? current.symbol;
     const direction = body.direction ?? current.direction;

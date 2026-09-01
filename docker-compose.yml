@@ -1,0 +1,25 @@
+# Local Postgres for development. Replaces the hand-run `docker run` that the repo used before.
+#   pnpm db:up      start it (waits until it's actually accepting connections)
+#   pnpm db:down    stop + remove the container (data survives in the named volume)
+#   pnpm db:reset   wipe the volume, recreate, re-push schema, re-seed
+# DATABASE_URL in apps/api/.env and packages/db/.env must match the credentials below.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pipntick-postgres
+    environment:
+      POSTGRES_USER: pipntick
+      POSTGRES_PASSWORD: pipntick
+      POSTGRES_DB: pipntick
+    ports:
+      - "5432:5432"
+    volumes:
+      - pipntick-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pipntick -d pipntick"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pipntick-pgdata:

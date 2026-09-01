@@ -213,6 +213,53 @@ html {
   transform: scale(0.97);
 }
 
+/* Trading-form date picker (DateTimePicker.tsx): hovering — or keyboard-focusing — a selectable
+   day traces a ring around the number, drawn clockwise starting from the top. The <circle> sits
+   in an SVG centered behind the number; on hover its stroke-dashoffset animates from the full
+   circumference down to 0, so the stroke "draws itself". rotate(-90deg) moves the stroke's start
+   point from 3 o'clock to 12 o'clock, giving the top -> right -> bottom -> left -> top sweep.
+   The global prefers-reduced-motion rule below collapses the transition to near-instant. */
+.dtp-day {
+  position: relative;
+}
+
+.dtp-day-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.dtp-day-ring circle {
+  fill: none;
+  stroke: var(--color-green-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  /* 2 * pi * r, r = 14 in the 0 0 32 32 viewBox */
+  stroke-dasharray: 87.96;
+  stroke-dashoffset: 87.96;
+  transition: stroke-dashoffset 0.55s ease;
+}
+
+.dtp-day:not(:disabled):hover .dtp-day-ring circle,
+.dtp-day:not(:disabled):focus-visible .dtp-day-ring circle {
+  stroke-dashoffset: 0;
+}
+
+.dtp-day-num {
+  position: relative;
+  transition: color 0.2s ease;
+}
+
+.dtp-day:not(:disabled):hover .dtp-day-num,
+.dtp-day:not(:disabled):focus-visible .dtp-day-num {
+  color: #fff;
+  font-weight: 700;
+}
+
 /* Native View Transitions crossfade (see ViewTransitionLink.tsx) — default browser timing is a bit
    quick/linear, this matches the 200-300ms ease used for other motion in the app. */
 ::view-transition-old(root),

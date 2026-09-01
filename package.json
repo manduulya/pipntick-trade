@@ -3,10 +3,15 @@
   "private": true,
   "scripts": {
     "dev": "turbo dev",
+    "dev:full": "pnpm db:up && turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "test": "turbo test"
+    "test": "turbo test",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && pnpm db:up && pnpm --filter @pipntick/db db:push && pnpm --filter @pipntick/db db:seed",
+    "setup": "pnpm install && pnpm db:up && pnpm --filter @pipntick/db db:push && pnpm --filter @pipntick/db db:seed"
   },
   "devDependencies": {
     "railway": "^3.8.1",
