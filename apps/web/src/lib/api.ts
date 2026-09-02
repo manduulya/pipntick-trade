@@ -11,13 +11,13 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
+  // NB: do NOT set `cache: "no-store"` here. WebKit drops the request body on a non-GET fetch
+  // when that option is set (https://bugs.webkit.org/show_bug.cgi?id=252542), which made PATCH
+  // silently no-op on Safari — the row came back 200 with every field merged from its unchanged
+  // current value. Cache-busting is handled server-side instead: the API sends
+  // `Cache-Control: no-store` on every response (apps/api/src/index.ts).
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    // Never serve API data from the browser's HTTP cache — it's per-user and changes on every
-    // mutation. iOS Safari in particular will otherwise hand back a stale GET after an edit, so
-    // React Query's post-mutation refetch sees the old list. Pairs with Cache-Control: no-store
-    // on the API side.
-    cache: "no-store",
     headers: {
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
