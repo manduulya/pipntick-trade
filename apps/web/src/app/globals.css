@@ -187,6 +187,54 @@ html {
   color: #f0f0f0;
 }
 
+/* Long-form reading for the /privacy and /terms pages — plain, high-contrast body text with
+   generous spacing. Scoped so it can't leak into app UI. */
+.legal-prose {
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+.legal-prose h2 {
+  color: var(--color-text-primary);
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.legal-prose h3 {
+  color: var(--color-text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.legal-prose p {
+  margin-bottom: 1rem;
+}
+
+.legal-prose ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.legal-prose li {
+  margin-bottom: 0.4rem;
+}
+
+.legal-prose a {
+  color: var(--color-green-primary);
+  text-decoration: underline;
+}
+
+.legal-prose strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
 /* Visible keyboard focus indicator — the default browser outline is invisible/low-contrast
    against the page background in both themes, so every interactive element in the dashboard
    shell should use this instead of relying on the default. Only shows for keyboard focus

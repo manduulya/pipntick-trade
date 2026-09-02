@@ -1,8 +1,59 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import ViewTransitionLink from "./ViewTransitionLink";
+import SiteFooter from "./_components/SiteFooter";
+
+export const metadata: Metadata = {
+  description:
+    "A trading journal for logging every trade, spotting green and red days on a calendar, and tracking your win rate, profit factor, and P&L over weekly, monthly, and yearly ranges.",
+};
+
+const steps = [
+  {
+    n: "1",
+    title: "Log your trades",
+    description:
+      "Add trades by hand in seconds, drop in a broker screenshot for the details to be read automatically, or import a CSV. Entry, exit, size, session, and fees are all captured.",
+  },
+  {
+    n: "2",
+    title: "See your month at a glance",
+    description:
+      "Every trading day lands on the calendar as green or red with its net P&L, so winning and losing streaks — and the days you overtrade — jump out immediately.",
+  },
+  {
+    n: "3",
+    title: "Understand what's working",
+    description:
+      "The performance view breaks down win rate, profit factor, average win and loss, and results by instrument and direction across any time range you pick.",
+  },
+];
+
+const faqs = [
+  {
+    q: "Is pipntick free?",
+    a: "Yes. pipntick is in early access and free to use. Ads help cover hosting while it grows.",
+  },
+  {
+    q: "Do I need to connect my broker?",
+    a: "No. You can log every trade manually or from screenshots. Live MT4/MT5 sync is optional and coming as the platform matures.",
+  },
+  {
+    q: "Is my trading data private?",
+    a: "Yes. Your trades, notes, and screenshots are tied to your account and are never sold or shared. You can permanently delete everything from Settings at any time.",
+  },
+  {
+    q: "Does pipntick give trading advice?",
+    a: "No. pipntick is a record-keeping and analytics tool. Its numbers and any AI commentary are informational only and are not financial advice or trade recommendations.",
+  },
+  {
+    q: "What markets does it support?",
+    a: "Forex, metals, indices, stocks, and crypto — contract sizes for common instruments are handled automatically when P&L is calculated.",
+  },
+];
 
 const features = [
   {
@@ -123,8 +174,34 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* How it works */}
+      <section className="max-w-6xl mx-auto px-6 pb-28">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl font-bold tracking-tight mb-4">How pipntick works</h2>
+          <p className="text-base" style={{ color: "var(--color-text-secondary)" }}>
+            Three steps between a closed position and a clear picture of your edge.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {steps.map((s) => (
+            <div key={s.n}>
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold mb-4"
+                style={{ backgroundColor: "rgba(123,193,59,0.12)", border: "1px solid rgba(123,193,59,0.3)", color: "var(--color-green-primary)" }}
+              >
+                {s.n}
+              </div>
+              <h3 className="text-base font-semibold mb-2">{s.title}</h3>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+                {s.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Features */}
-      <section className="max-w-6xl mx-auto px-6 pb-32">
+      <section className="max-w-6xl mx-auto px-6 pb-28">
         <div className="text-center mb-16">
           <h2 className="text-3xl font-bold tracking-tight mb-4">
             Everything a serious trader needs
@@ -141,6 +218,21 @@ export default async function Home() {
               <h3 className="text-base font-semibold mb-2">{f.title}</h3>
               <p className="text-sm leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
                 {f.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="max-w-3xl mx-auto px-6 pb-28">
+        <h2 className="text-3xl font-bold tracking-tight mb-12 text-center">Frequently asked questions</h2>
+        <div className="flex flex-col">
+          {faqs.map((f) => (
+            <div key={f.q} className="py-6" style={{ borderTop: "1px solid var(--color-border)" }}>
+              <h3 className="text-base font-semibold mb-2">{f.q}</h3>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+                {f.a}
               </p>
             </div>
           ))}
@@ -169,19 +261,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer style={{ borderTop: "1px solid var(--color-border)" }}>
-        <div className="max-w-6xl mx-auto px-6 py-8 grid grid-cols-3 items-center text-xs" style={{ color: "var(--color-text-muted)" }}>
-          <span aria-hidden="true" />
-          <span className="text-center">© 2026 pipntick.trade</span>
-          <div className="flex gap-6 justify-end">
-            <SignedOut>
-              <Link href="/login" className="footer-link">Log in</Link>
-              <Link href="/register" className="footer-link">Register</Link>
-            </SignedOut>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
