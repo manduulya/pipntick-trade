@@ -211,6 +211,9 @@ export function TradeForm({
     }
     setDateError(null);
 
+    const exitTimeIso = exitDateTime ? new Date(`${exitDateTime}:00Z`).toISOString() : null;
+    const overridePnl = pnlOverride && manualPnl !== "" ? Number(manualPnl) : null;
+
     const input: CreateTradeInput = {
       symbol,
       direction,
@@ -218,19 +221,28 @@ export function TradeForm({
       lotSize: Number(lotSize),
       entryTime: new Date(`${entryDateTime}:00Z`).toISOString(),
       session: session || undefined,
-      notes: notes || undefined,
     };
-    if (exitPrice) input.exitPrice = Number(exitPrice);
-    if (exitDateTime) input.exitTime = new Date(`${exitDateTime}:00Z`).toISOString();
-    if (swap) input.swap = Number(swap);
-    if (commission) input.commission = Number(commission);
-    if (pnlOverride && manualPnl !== "") input.pnl = Number(manualPnl);
 
     if (isEdit) {
+      // Edit sends every optional field explicitly, `null` when the user cleared it — otherwise a
+      // cleared field is just omitted and the server keeps the old value (you could never remove
+      // a swap/commission/exit once set).
+      input.exitPrice = exitPrice !== "" ? Number(exitPrice) : null;
+      input.exitTime = exitTimeIso;
+      input.swap = swap !== "" ? Number(swap) : null;
+      input.commission = commission !== "" ? Number(commission) : null;
+      input.notes = notes !== "" ? notes : null;
+      input.pnl = overridePnl;
       updateTrade.mutate({ id: trade.id, input }, {
         onSuccess: () => handleSuccess("Trade updated successfully"),
       });
     } else {
+      if (exitPrice) input.exitPrice = Number(exitPrice);
+      if (exitTimeIso) input.exitTime = exitTimeIso;
+      if (swap) input.swap = Number(swap);
+      if (commission) input.commission = Number(commission);
+      if (notes) input.notes = notes;
+      if (overridePnl !== null) input.pnl = overridePnl;
       createTrade.mutate(input, {
         onSuccess: () => handleSuccess("Trade added successfully"),
       });

@@ -301,6 +301,100 @@ describe("PATCH /api/trades/:id", () => {
     expect(Number(updated.pnl)).toBeCloseTo(500);
   });
 
+  it("clears swap/commission when the patch sends them as null", async () => {
+    setSelectResult([
+      {
+        trade: {
+          id: "t1",
+          symbol: "EUR/USD",
+          direction: "long",
+          entryPrice: "1.1000",
+          exitPrice: "1.1050",
+          lotSize: "1",
+          swap: "-2.00",
+          commission: "-3.00",
+          pnl: "495.00",
+          pnlManual: false,
+          entryTime: new Date("2026-03-15T10:00:00.000Z"),
+          exitTime: new Date("2026-03-15T12:00:00.000Z"),
+          session: "London",
+          notes: null,
+          screenshotUrl: null,
+        },
+      },
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { swap: null, commission: null } });
+    expect(res.statusCode).toBe(200);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updated = getLastUpdateSet() as any;
+    expect(updated.swap).toBeNull();
+    expect(updated.commission).toBeNull();
+    expect(Number(updated.pnl)).toBeCloseTo(500); // recomputed without the -2/-3 adjustments
+  });
+
+  it("keeps the stored swap when the patch omits it entirely", async () => {
+    setSelectResult([
+      {
+        trade: {
+          id: "t1",
+          symbol: "EUR/USD",
+          direction: "long",
+          entryPrice: "1.1000",
+          exitPrice: "1.1050",
+          lotSize: "1",
+          swap: "-2.00",
+          commission: null,
+          pnl: "498.00",
+          pnlManual: false,
+          entryTime: new Date("2026-03-15T10:00:00.000Z"),
+          exitTime: new Date("2026-03-15T12:00:00.000Z"),
+          session: "London",
+          notes: null,
+          screenshotUrl: null,
+        },
+      },
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { notes: "reviewed" } });
+    expect(res.statusCode).toBe(200);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updated = getLastUpdateSet() as any;
+    expect(updated.swap).toBe("-2");
+    expect(updated.notes).toBe("reviewed");
+  });
+
+  it("drops a manual pnl override and recomputes when the patch sends pnl: null", async () => {
+    setSelectResult([
+      {
+        trade: {
+          id: "t1",
+          symbol: "EUR/USD",
+          direction: "long",
+          entryPrice: "1.1000",
+          exitPrice: "1.1050",
+          lotSize: "1",
+          swap: null,
+          commission: null,
+          pnl: "999.00",
+          pnlManual: true,
+          entryTime: new Date("2026-03-15T10:00:00.000Z"),
+          exitTime: new Date("2026-03-15T12:00:00.000Z"),
+          session: "London",
+          notes: null,
+          screenshotUrl: null,
+        },
+      },
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { pnl: null } });
+    expect(res.statusCode).toBe(200);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updated = getLastUpdateSet() as any;
+    expect(updated.pnlManual).toBe(false);
+    expect(Number(updated.pnl)).toBeCloseTo(500);
+  });
+
   it("returns 400 when a patched exitTime predates the existing entryTime", async () => {
     setSelectResult([
       {

@@ -83,19 +83,21 @@ export interface CreateTradeInput {
   symbol: string;
   direction: TradeDirection;
   entryPrice: number;
-  exitPrice?: number;
   lotSize: number;
   entryTime: string;
-  exitTime?: string;
   session?: string;
-  notes?: string;
   source?: TradeSource;
   screenshotUrl?: string;
-  /** Manual P&L override. Omit to auto-calculate from entry/exit/lot/contract size (+ swap/commission). */
-  pnl?: number;
+  // Clearable optional fields. On PATCH: omit/undefined = leave unchanged, `null` = clear it,
+  // a value = set it. On POST: `null` behaves the same as omitting.
+  exitPrice?: number | null;
+  exitTime?: string | null;
+  notes?: string | null;
+  /** Manual P&L override. Omit to auto-calculate from entry/exit/lot/contract size (+ swap/commission); `null` clears an existing override. */
+  pnl?: number | null;
   /** Signed broker adjustments (negative = a cost). Folded into the auto-calculated pnl. */
-  swap?: number;
-  commission?: number;
+  swap?: number | null;
+  commission?: number | null;
 }
 
 /** Trade fields extracted from a broker screenshot via OCR. Any field can be null if not legible/present. */
