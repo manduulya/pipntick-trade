@@ -44,7 +44,7 @@ export default function DateTimePicker({
   const containerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const PANEL_WIDTH = 288;
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
 
   const [datePart, timePart] = value ? (value.split("T") as [string, string]) : ["", ""];
 
@@ -101,27 +101,63 @@ export default function DateTimePicker({
   // The panel is portaled to document.body (see the render below) rather than living inside this
   // component's own DOM subtree, so it has to be positioned manually from the trigger's actual
   // screen position instead of relying on `position: absolute` + a `relative` ancestor. Recomputed
-  // on scroll/resize too, so it stays pinned under the trigger instead of drifting off if the
-  // surrounding modal scrolls while open. Clamped so it can't run off the right edge of the
-  // viewport on a narrow screen.
+  // on scroll/resize — and on visualViewport changes, which is what fires when the mobile-Safari
+  // keyboard opens (tapping the HH/MM inputs). The panel is anchored under the trigger but then
+  // hard-clamped inside the *visible* viewport (above the keyboard), flipping above the trigger
+  // when there's more room there, so it can never scroll off-screen with the trigger.
   useEffect(() => {
-    if (!open) return;
+    if (!mounted) return;
     function updatePosition() {
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setCoords({
-        top: rect.bottom + 4,
-        left: Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 8),
-      });
+      const vv = window.visualViewport;
+      const vTop = vv?.offsetTop ?? 0;
+      const vLeft = vv?.offsetLeft ?? 0;
+      const vH = vv?.height ?? window.innerHeight;
+      const vW = vv?.width ?? window.innerWidth;
+      const M = 8; // keep this much gap from every viewport edge
+      const panelH = panelRef.current?.offsetHeight ?? 360;
+
+      const minTop = vTop + M;
+      const maxHeight = vH - 2 * M;
+      const belowAnchor = rect.bottom + vTop + 4;
+      const aboveAnchor = rect.top + vTop - Math.min(panelH, maxHeight) - 4;
+      const roomBelow = vTop + vH - M - belowAnchor;
+      // Prefer below the trigger; flip above only if it doesn't fit below but does fit above.
+      let top = belowAnchor;
+      if (roomBelow < Math.min(panelH, maxHeight) && aboveAnchor >= minTop) top = aboveAnchor;
+      top = Math.max(minTop, Math.min(top, vTop + vH - M - Math.min(panelH, maxHeight)));
+
+      let left = rect.left + vLeft;
+      left = Math.min(left, vLeft + vW - PANEL_WIDTH - M);
+      left = Math.max(vLeft + M, left);
+
+      setCoords({ top, left, maxHeight });
     }
     updatePosition();
+    // Re-run once the panel has actually painted (so `offsetHeight` is real), then keep it pinned
+    // as the panel itself reflows — e.g. the calendar growing to a 6th week row.
+    let ro: ResizeObserver | null = null;
+    const raf = requestAnimationFrame(() => {
+      updatePosition();
+      if (panelRef.current) {
+        ro = new ResizeObserver(updatePosition);
+        ro.observe(panelRef.current);
+      }
+    });
     window.addEventListener("scroll", updatePosition, true);
     window.addEventListener("resize", updatePosition);
+    window.visualViewport?.addEventListener("resize", updatePosition);
+    window.visualViewport?.addEventListener("scroll", updatePosition);
     return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
       window.removeEventListener("scroll", updatePosition, true);
       window.removeEventListener("resize", updatePosition);
+      window.visualViewport?.removeEventListener("resize", updatePosition);
+      window.visualViewport?.removeEventListener("scroll", updatePosition);
     };
-  }, [open]);
+  }, [mounted]);
 
   // Portaling out of this component's own subtree means containerRef.contains(...) alone no
   // longer covers clicks inside the panel (it's a child of document.body now, not of the
@@ -191,6 +227,14 @@ export default function DateTimePicker({
     if (e.key === "Enter") e.preventDefault();
   }
 
+  // Mobile: the numeric keyboard covers the lower screen when an HH/MM field is focused. Once it
+  // has begun animating in (and the visualViewport listener above has re-clamped the panel), nudge
+  // the time row into view inside the now-scrollable panel.
+  function scrollTimeRowIntoView(e: React.FocusEvent<HTMLInputElement>) {
+    const el = e.currentTarget;
+    setTimeout(() => el.scrollIntoView({ block: "nearest", behavior: "smooth" }), 300);
+  }
+
   const monthName = new Date(Date.UTC(viewedYear, viewedMonth, 1)).toLocaleString("default", { month: "long", timeZone: "UTC" });
   const firstDay = new Date(Date.UTC(viewedYear, viewedMonth, 1)).getUTCDay();
   const daysInMonth = new Date(Date.UTC(viewedYear, viewedMonth + 1, 0)).getUTCDate();
@@ -226,10 +270,12 @@ export default function DateTimePicker({
       {mounted && coords && createPortal(
         <div
           ref={panelRef}
-          className="fixed z-50 rounded-lg p-4 flex flex-col gap-3"
+          className="thin-scrollbar fixed z-50 rounded-lg p-4 flex flex-col gap-3"
           style={{
             top: coords.top,
             left: coords.left,
+            maxHeight: coords.maxHeight,
+            overflowY: "auto",
             backgroundColor: "var(--color-bg-surface)",
             border: "1px solid var(--color-border)",
             boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
@@ -308,6 +354,7 @@ export default function DateTimePicker({
                 placeholder={twelveHour ? "H" : "HH"}
                 value={hourInput}
                 onKeyDown={preventEnterSubmit}
+                onFocus={scrollTimeRowIntoView}
                 onChange={(e) => { const v = digitsOnly(e.target.value, 2); setHourInput(v); commitTime(v, minuteInput); }}
                 style={timeInputStyle}
               />
@@ -318,6 +365,7 @@ export default function DateTimePicker({
                 placeholder="MM"
                 value={minuteInput}
                 onKeyDown={preventEnterSubmit}
+                onFocus={scrollTimeRowIntoView}
                 onChange={(e) => { const v = digitsOnly(e.target.value, 2); setMinuteInput(v); commitTime(hourInput, v); }}
                 style={timeInputStyle}
               />
