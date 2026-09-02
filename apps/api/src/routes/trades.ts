@@ -13,22 +13,29 @@ type CreateTradeBody = {
   symbol: string;
   direction: TradeDirection;
   entryPrice: number;
-  exitPrice?: number;
   lotSize: number;
   entryTime: string;
-  exitTime?: string;
   session?: string;
-  notes?: string;
   source?: TradeSource;
   screenshotUrl?: string;
-  /** Manual P&L override. Omit to auto-calculate from entry/exit/lot/contract size (+ swap/commission). */
-  pnl?: number;
+  // Clearable optionals. On PATCH: absent = keep, `null` = clear, value = set. On POST: `null` == absent.
+  exitPrice?: number | null;
+  exitTime?: string | null;
+  notes?: string | null;
+  /** Manual P&L override. Omit/`null` to auto-calculate from entry/exit/lot/contract size (+ swap/commission). */
+  pnl?: number | null;
   /** Signed broker adjustments (negative = a cost). Folded into the auto-calculated pnl. */
-  swap?: number;
-  commission?: number;
+  swap?: number | null;
+  commission?: number | null;
 };
 
 type UpdateTradeBody = Partial<CreateTradeBody>;
+
+// A clearable numeric body field -> a plain number when set, or undefined when the caller sent
+// nothing / an explicit null. Collapses "absent" and "cleared" for the POST path and for pnl math.
+function optNum(v: number | null | undefined): number | undefined {
+  return v == null ? undefined : v;
+}
 
 async function resolveAccountId(userId: string, requestedAccountId?: string) {
   if (requestedAccountId) {
@@ -96,11 +103,15 @@ export async function tradeRoutes(app: FastifyInstance) {
     const accountId = await resolveAccountId(userId, body.accountId);
     if (!accountId) return reply.code(404).send({ error: "Account not found" });
 
-    const manualPnl = body.pnl !== undefined;
+    const exitPrice = optNum(body.exitPrice);
+    const swap = optNum(body.swap);
+    const commission = optNum(body.commission);
+    const overridePnl = optNum(body.pnl);
+    const manualPnl = overridePnl !== undefined;
     const pnl = manualPnl
-      ? body.pnl!
-      : body.exitPrice !== undefined
-        ? computePnl(body.direction, body.entryPrice, body.exitPrice, body.lotSize, body.symbol, body.swap, body.commission)
+      ? overridePnl
+      : exitPrice !== undefined
+        ? computePnl(body.direction, body.entryPrice, exitPrice, body.lotSize, body.symbol, swap, commission)
         : null;
 
     const [trade] = await db
@@ -109,18 +120,18 @@ export async function tradeRoutes(app: FastifyInstance) {
         accountId,
         symbol: body.symbol,
         direction: body.direction,
-        status: body.exitPrice !== undefined ? "closed" : "open",
+        status: exitPrice !== undefined ? "closed" : "open",
         entryPrice: String(body.entryPrice),
-        exitPrice: body.exitPrice !== undefined ? String(body.exitPrice) : null,
+        exitPrice: exitPrice !== undefined ? String(exitPrice) : null,
         lotSize: String(body.lotSize),
         pnl: pnl !== null ? String(pnl) : null,
         pnlManual: manualPnl,
-        swap: body.swap !== undefined ? String(body.swap) : null,
-        commission: body.commission !== undefined ? String(body.commission) : null,
+        swap: swap !== undefined ? String(swap) : null,
+        commission: commission !== undefined ? String(commission) : null,
         entryTime: new Date(body.entryTime),
         exitTime: body.exitTime ? new Date(body.exitTime) : null,
         session: body.session,
-        notes: body.notes,
+        notes: body.notes ?? null,
         source: body.source ?? "manual",
         screenshotUrl: body.screenshotUrl,
       })
@@ -145,34 +156,54 @@ export async function tradeRoutes(app: FastifyInstance) {
     if (!existing) return reply.code(404).send({ error: "Trade not found" });
     const current = existing.trade;
 
-    const effectiveEntryTime = body.entryTime ? new Date(body.entryTime) : current.entryTime;
-    const effectiveExitTime = body.exitTime ? new Date(body.exitTime) : current.exitTime;
-    if (effectiveExitTime && effectiveExitTime < effectiveEntryTime) {
-      return reply.code(400).send({ error: "exitTime cannot be earlier than entryTime" });
-    }
-    // Only guard times the client is actually changing — an untouched past timestamp on a
-    // notes-only patch must still pass.
-    const futureCutoff = Date.now() + FUTURE_TOLERANCE_MS;
-    if (body.entryTime && effectiveEntryTime.getTime() > futureCutoff) {
-      return reply.code(400).send({ error: "entryTime cannot be in the future" });
-    }
-    if (body.exitTime && effectiveExitTime && effectiveExitTime.getTime() > futureCutoff) {
-      return reply.code(400).send({ error: "exitTime cannot be in the future" });
-    }
-
+    // Per-field merge rule for the clearable optionals: key absent in the body -> keep what's
+    // stored; `null` -> clear it; a value -> set it. (`??` can't express this — it treats an
+    // explicit null the same as absent, which is why a cleared swap/commission/exit used to
+    // "stick" at its old value.)
     const symbol = body.symbol ?? current.symbol;
     const direction = body.direction ?? current.direction;
     const entryPrice = body.entryPrice ?? Number(current.entryPrice);
-    const exitPrice = body.exitPrice ?? (current.exitPrice !== null ? Number(current.exitPrice) : undefined);
     const lotSize = body.lotSize ?? Number(current.lotSize);
-    const swap = body.swap ?? (current.swap !== null ? Number(current.swap) : undefined);
-    const commission = body.commission ?? (current.commission !== null ? Number(current.commission) : undefined);
-    const manualPnl = body.pnl !== undefined;
-    const pnl = manualPnl
-      ? body.pnl!
-      : exitPrice !== undefined
-        ? computePnl(direction, entryPrice, exitPrice, lotSize, symbol, swap, commission)
-        : null;
+
+    const currentNum = (v: string | null) => (v !== null ? Number(v) : undefined);
+    const exitPrice =
+      body.exitPrice === undefined ? currentNum(current.exitPrice) : optNum(body.exitPrice);
+    const swap = body.swap === undefined ? currentNum(current.swap) : optNum(body.swap);
+    const commission =
+      body.commission === undefined ? currentNum(current.commission) : optNum(body.commission);
+    const notes = body.notes === undefined ? current.notes : body.notes;
+    const entryTime = body.entryTime ? new Date(body.entryTime) : current.entryTime;
+    const exitTime =
+      body.exitTime === undefined ? current.exitTime : body.exitTime ? new Date(body.exitTime) : null;
+
+    if (exitTime && exitTime < entryTime) {
+      return reply.code(400).send({ error: "exitTime cannot be earlier than entryTime" });
+    }
+    // Only guard times the client is actually sending — an untouched past timestamp must still pass.
+    const futureCutoff = Date.now() + FUTURE_TOLERANCE_MS;
+    if (body.entryTime && entryTime.getTime() > futureCutoff) {
+      return reply.code(400).send({ error: "entryTime cannot be in the future" });
+    }
+    if (body.exitTime && exitTime && exitTime.getTime() > futureCutoff) {
+      return reply.code(400).send({ error: "exitTime cannot be in the future" });
+    }
+
+    // pnl: a number => manual override; `null` => drop the override and recompute; absent => leave
+    // the override state as-is (keep the stored manual value, or recompute if it wasn't manual).
+    let manualPnl: boolean;
+    let pnl: number | null;
+    if (typeof body.pnl === "number") {
+      manualPnl = true;
+      pnl = body.pnl;
+    } else {
+      manualPnl = body.pnl === null ? false : current.pnlManual;
+      pnl =
+        manualPnl && body.pnl === undefined
+          ? currentNum(current.pnl) ?? null
+          : exitPrice !== undefined
+            ? computePnl(direction, entryPrice, exitPrice, lotSize, symbol, swap, commission)
+            : null;
+    }
 
     const [updated] = await db
       .update(trades)
@@ -187,10 +218,10 @@ export async function tradeRoutes(app: FastifyInstance) {
         pnlManual: manualPnl,
         swap: swap !== undefined ? String(swap) : null,
         commission: commission !== undefined ? String(commission) : null,
-        entryTime: body.entryTime ? new Date(body.entryTime) : current.entryTime,
-        exitTime: body.exitTime ? new Date(body.exitTime) : current.exitTime,
+        entryTime,
+        exitTime,
         session: body.session ?? current.session,
-        notes: body.notes ?? current.notes,
+        notes,
         screenshotUrl: body.screenshotUrl ?? current.screenshotUrl,
         updatedAt: new Date(),
       })

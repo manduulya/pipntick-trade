@@ -185,7 +185,8 @@ function EditTradeModal({ trade, onClose, onSaved }: { trade: Trade; onClose: ()
         backdropFilter: visible ? "blur(4px)" : "blur(0px)",
         transition: "background-color 0.3s ease, backdrop-filter 0.3s ease",
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+      // Deliberately no click-outside-to-close: this form holds a lot of manually entered data,
+      // so an accidental backdrop click shouldn't discard it. Close is via the × button only.
     >
       <div
         className="w-full max-w-md rounded-2xl overflow-hidden flex flex-col"
