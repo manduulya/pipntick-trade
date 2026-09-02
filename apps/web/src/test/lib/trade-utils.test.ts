@@ -7,6 +7,7 @@ import {
   computeInstrumentRows,
   computeMonthCalendar,
   computePeriodStats,
+  detectSession,
   filterByPeriod,
   formatDuration,
   isClosed,
@@ -14,8 +15,10 @@ import {
   periodOffsetFor,
   periodRange,
   pnlOf,
+  toDatetimeLocal,
   toJournalRow,
 } from "../../lib/trade-utils";
+import { brokerWallClockToUtc } from "../../lib/time-format";
 
 // Minimal builder — only the fields each test cares about need overriding.
 function makeTrade(overrides: Partial<Trade> = {}): Trade {
@@ -328,5 +331,37 @@ describe("computeCharts", () => {
     expect(yearly).toHaveLength(12);
     expect(monthly.length).toBeGreaterThanOrEqual(28);
     expect(monthly.length).toBeLessThanOrEqual(31);
+  });
+});
+
+describe("toDatetimeLocal", () => {
+  it("trims an ISO string to the datetime-local shape", () => {
+    expect(toDatetimeLocal("2026-09-02T15:21:00.000Z")).toBe("2026-09-02T15:21");
+    expect(toDatetimeLocal("2026-09-02T15:21:00")).toBe("2026-09-02T15:21");
+  });
+
+  it("returns an empty string for nullish input", () => {
+    expect(toDatetimeLocal(null)).toBe("");
+    expect(toDatetimeLocal(undefined)).toBe("");
+    expect(toDatetimeLocal("")).toBe("");
+  });
+});
+
+describe("detectSession", () => {
+  it("maps UTC hours to the forex session", () => {
+    expect(detectSession("")).toBe("");
+    expect(detectSession("03:00")).toBe("Tokyo");
+    expect(detectSession("09:30")).toBe("London");
+    expect(detectSession("14:00")).toBe("London / New York");
+    expect(detectSession("18:00")).toBe("New York");
+    expect(detectSession("23:00")).toBe("Sydney");
+  });
+
+  it("must be fed the UTC time, not the raw broker wall-clock", () => {
+    // 09:00 on a UTC+2 broker clock is 07:00 UTC — still Tokyo, not London
+    const utc = brokerWallClockToUtc("2026-09-02T09:00", 120).toISOString().slice(11, 16);
+    expect(utc).toBe("07:00");
+    expect(detectSession(utc)).toBe("Tokyo");
+    expect(detectSession("09:00")).toBe("London"); // what reading the raw digits would wrongly give
   });
 });

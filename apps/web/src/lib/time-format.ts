@@ -48,6 +48,26 @@ export function usesTwelveHour(format: DateTimeFormat): boolean {
   return format === "us-12h" || format === "intl-12h";
 }
 
+/** A broker-server UTC offset in minutes -> a short label for the trade-form date fields.
+ * 0 -> "UTC", 120 -> "UTC+2", -300 -> "UTC−5", 330 -> "UTC+5:30". */
+export function formatUtcOffsetLabel(offsetMinutes: number): string {
+  if (!offsetMinutes) return "UTC";
+  const sign = offsetMinutes > 0 ? "+" : "−";
+  const abs = Math.abs(offsetMinutes);
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  return `UTC${sign}${h}${m ? `:${pad2(m)}` : ""}`;
+}
+
+/** Given a broker wall-clock "YYYY-MM-DDTHH:mm" (as typed into the trade form) and the account's
+ * broker-server UTC offset in minutes, return the real UTC instant it refers to. e.g. "15:21" at
+ * offset 120 (UTC+2) -> 13:21 UTC. Used for the "not in the future" / account-start checks and
+ * the session lookup, all of which reason in real/UTC time; storage and display keep the raw
+ * broker wall-clock digits (see lib/trade-utils.ts). */
+export function brokerWallClockToUtc(value: string, offsetMinutes: number): Date {
+  return new Date(new Date(`${value}:00Z`).getTime() - offsetMinutes * 60_000);
+}
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 function formatDatePart(y: number, mo: number, d: number, format: DateTimeFormat): string {

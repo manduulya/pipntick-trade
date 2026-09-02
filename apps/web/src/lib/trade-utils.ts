@@ -2,20 +2,42 @@ import type { Trade } from "@pipntick/shared";
 
 export type Period = "weekly" | "monthly" | "yearly";
 
-// entryTime/exitTime are entered and stored as literal UTC wall-clock digits (TradeForm appends
-// "Z" to whatever the user typed, unrelated to their actual timezone — see the "(UTC)" field
-// labels and detectSession's UTC-hour session boundaries) — not a real timezone-aware instant tied
-// to wherever the trade happened. Calendar/period bucketing needs to group by *that* wall-clock
-// date, not by whatever local date the underlying UTC instant happens to fall on for the viewer's
-// browser: a trade entered as "2026-08-04T00:00Z" is midnight Aug 3 local in any timezone behind
-// UTC, so reading it with plain local getters (getDate(), getMonth(), ...) silently shifts it back
-// a day for most of the Americas. Reconstructing a Date from the UTC fields makes its *local*
-// getters return the original wall-clock digits instead, so all the local-getter-based bucketing
-// below (periodRange's boundaries, computeCharts' bucket keys, etc.) lines up correctly. Never use
-// this for elapsed-time arithmetic (formatDuration, avgDuration) — those need the real instant.
+// entryTime/exitTime are entered and stored as literal wall-clock digits in the account's
+// broker-server timezone (TradeForm appends "Z" to whatever the user typed — see its date-field
+// labels, and `brokerWallClockToUtc` for the few checks that do need a real instant) — not a
+// timezone-aware instant tied to wherever the trade happened. Calendar/period bucketing needs to
+// group by *that* wall-clock date, not by whatever local date the underlying UTC instant happens
+// to fall on for the viewer's browser: a trade entered as "2026-08-04T00:00Z" is midnight Aug 3
+// local in any timezone behind UTC, so reading it with plain local getters (getDate(), getMonth(),
+// ...) silently shifts it back a day for most of the Americas. Reconstructing a Date from the UTC
+// fields makes its *local* getters return the original wall-clock digits instead, so all the
+// local-getter-based bucketing below (periodRange's boundaries, computeCharts' bucket keys, etc.)
+// lines up correctly. Never use this for elapsed-time arithmetic (formatDuration, avgDuration) —
+// those need the real instant.
 export function utcWallClock(iso: string): Date {
   const d = new Date(iso);
   return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+}
+
+// ISO-like "YYYY-MM-DDTHH:mm:ss" -> "YYYY-MM-DDTHH:mm" (the <input type="datetime-local"> value
+// shape). A plain slice, not a Date round-trip, so the stored wall-clock digits are preserved as-is.
+export function toDatetimeLocal(value: string | null | undefined): string {
+  return value ? value.slice(0, 16) : "";
+}
+
+// Maps an "HH:mm" **UTC** time-of-day to the forex session that's active then. Callers hold a
+// broker wall-clock time, so convert with `brokerWallClockToUtc` before calling — the boundaries
+// here are UTC hours (London 08:00-13:00, London/NY overlap 13:00-17:00, NY 17:00-22:00, Tokyo
+// 00:00-09:00, Sydney otherwise).
+export function detectSession(timeStr: string): string {
+  if (!timeStr) return "";
+  const [h, m] = timeStr.split(":").map(Number);
+  const mins = h * 60 + m;
+  if (mins >= 480 && mins < 780)  return "London";
+  if (mins >= 780 && mins < 1020) return "London / New York";
+  if (mins >= 1020 && mins < 1320) return "New York";
+  if (mins >= 0   && mins < 540)  return "Tokyo";
+  return "Sydney";
 }
 
 // Calendar-aligned, not a rolling window: "weekly" is Sun-Sat of a given week, "monthly" is the

@@ -42,9 +42,12 @@ async function resolveAccountId(userId: string, requestedAccountId?: string) {
   return account?.id ?? null;
 }
 
-// Clock-skew grace for the "not in the future" checks below: a trade timestamped "just now" on
-// the client shouldn't 400 because the client's and this server's clocks differ by a few seconds.
-const FUTURE_TOLERANCE_MS = 2 * 60_000;
+// Grace window for the "not in the future" checks below. The web client stores trade times as
+// broker-server wall-clock digits (labeled UTC) and does the precise, offset-aware future check
+// itself; this endpoint doesn't know the account's broker timezone, so its own check has to
+// tolerate any real-world UTC offset (max UTC+14) plus a little clock skew. It stays useful as a
+// coarse backstop against a wildly-wrong date (wrong year/month).
+const FUTURE_TOLERANCE_MS = 14 * 60 * 60_000 + 5 * 60_000;
 
 export function computePnl(
   direction: TradeDirection,

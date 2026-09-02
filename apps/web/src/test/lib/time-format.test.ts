@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  brokerWallClockToUtc,
   formatDate,
   formatDateTime,
+  formatUtcOffsetLabel,
   resolveInitialTimeFormat,
   to12Hour,
   to24Hour,
@@ -125,5 +127,39 @@ describe("formatDate", () => {
       const dateTime = formatDateTime(`${value}T13:48`, format);
       expect(dateTime.startsWith(dateOnly)).toBe(true);
     }
+  });
+});
+
+describe("formatUtcOffsetLabel", () => {
+  it("returns plain UTC for a zero / unset offset", () => {
+    expect(formatUtcOffsetLabel(0)).toBe("UTC");
+  });
+
+  it("formats whole-hour offsets", () => {
+    expect(formatUtcOffsetLabel(120)).toBe("UTC+2");
+    expect(formatUtcOffsetLabel(-300)).toBe("UTC−5");
+  });
+
+  it("formats half-hour offsets", () => {
+    expect(formatUtcOffsetLabel(330)).toBe("UTC+5:30");
+    expect(formatUtcOffsetLabel(-210)).toBe("UTC−3:30");
+  });
+});
+
+describe("brokerWallClockToUtc", () => {
+  it("subtracts the offset to get the real instant", () => {
+    // 15:21 on a UTC+2 broker clock is 13:21 UTC
+    expect(brokerWallClockToUtc("2026-09-02T15:21", 120).toISOString()).toBe("2026-09-02T13:21:00.000Z");
+  });
+
+  it("is the identity for a zero offset", () => {
+    expect(brokerWallClockToUtc("2026-09-02T15:21", 0).toISOString()).toBe("2026-09-02T15:21:00.000Z");
+  });
+
+  it("handles a negative offset and day rollover", () => {
+    // 01:30 on a UTC-5 broker clock is 06:30 UTC the same day
+    expect(brokerWallClockToUtc("2026-09-02T01:30", -300).toISOString()).toBe("2026-09-02T06:30:00.000Z");
+    // 23:30 on a UTC+2 clock rolls forward past midnight UTC
+    expect(brokerWallClockToUtc("2026-09-02T23:30", 120).toISOString()).toBe("2026-09-02T21:30:00.000Z");
   });
 });
