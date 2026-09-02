@@ -8,10 +8,27 @@ import { THEME_INIT_SCRIPT } from "../lib/theme";
 import { TimeFormatProvider } from "../lib/time-format-context";
 
 const ADSENSE_CLIENT_ID = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://pipntick.trade";
 
 export const metadata: Metadata = {
-  title: "Track every trade. Own your edge.",
-  description: "Trade smarter.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "pipntick — Trading journal & performance analytics",
+    template: "%s — pipntick",
+  },
+  description:
+    "pipntick is a trading journal that helps you log every trade, review them on a calendar, and analyse your win rate, profit factor, and P&L over time.",
+  applicationName: "pipntick",
+  keywords: ["trading journal", "trade log", "forex journal", "trading analytics", "performance tracking", "MT4", "MT5"],
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: "pipntick",
+    title: "pipntick — Trading journal & performance analytics",
+    description:
+      "Log every trade, see your month at a glance, and understand what's actually working in your trading.",
+  },
   icons: {
     icon: "/favicon.svg",
   },

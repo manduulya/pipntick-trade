@@ -49,7 +49,11 @@ export default function AdSlot() {
   }
 
   return (
-    <div className="mx-2 mb-3 overflow-hidden rounded-lg" style={{ border: "1px solid var(--color-border)" }}>
+    <div
+      className="mx-2 mb-3 overflow-hidden rounded-lg"
+      // Reserve space so an ad filling in later doesn't shove the sidebar's bottom nav around.
+      style={{ border: "1px solid var(--color-border)", minHeight: 100 }}
+    >
       <ins
         className="adsbygoogle"
         style={{ display: "block" }}
