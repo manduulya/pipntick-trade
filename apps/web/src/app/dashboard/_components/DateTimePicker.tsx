@@ -20,6 +20,7 @@ export default function DateTimePicker({
   min,
   max,
   style,
+  tzLabel = "UTC",
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -29,6 +30,8 @@ export default function DateTimePicker({
   min?: string;
   max?: string;
   style?: React.CSSProperties;
+  /** Timezone the entered wall-clock is in, shown next to the time inputs. Defaults to "UTC". */
+  tzLabel?: string;
 }) {
   const { timeFormat } = useTimeFormat();
   const twelveHour = usesTwelveHour(timeFormat);
@@ -328,7 +331,7 @@ export default function DateTimePicker({
                   {period}
                 </button>
               )}
-              <span className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>UTC</span>
+              <span className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>{tzLabel}</span>
             </div>
             <button
               type="button"

@@ -186,7 +186,7 @@ export default function BrokerTimezoneField({
         </div>
       </div>
       <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-        Pick your platform&apos;s server time zone (e.g. in MT4/5, right-click Market Watch → check server time). Used to auto-convert screenshot-imported trade times to UTC — leave as &quot;Not set&quot; if unsure.
+        Pick your platform&apos;s server time zone (e.g. in MT4/5, right-click Market Watch → check server time). Trade date/time fields then read as this zone, and it&apos;s used to work out the trading session — leave as &quot;Not set&quot; to enter times in UTC.
       </p>
     </div>
   );
