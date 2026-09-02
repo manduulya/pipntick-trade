@@ -127,6 +127,19 @@ export function TradeForm({
   const [pnlOverride, setPnlOverride] = useState(trade?.pnlManual ?? false);
   const [manualPnl, setManualPnl] = useState(trade?.pnl ?? "");
   const [missingFields, setMissingFields] = useState<string[]>([]);
+
+  // The exact string values the edit form opened with, so submit can send only the optional
+  // fields the user actually changed. Sending every optional every time re-asserts the whole
+  // trade — which e.g. reopens a closed trade if the exit-price field happens to render empty.
+  const initial = {
+    exitPrice: trade ? trimTrailingZeros(trade.exitPrice) : "",
+    exitDateTime: toDatetimeLocal(trade?.exitTime),
+    swap: trade?.swap ?? "",
+    commission: trade?.commission ?? "",
+    notes: trade?.notes ?? "",
+    pnlOverride: trade?.pnlManual ?? false,
+    manualPnl: trade?.pnl ?? "",
+  };
   const [dateError, setDateError] = useState<{ field: string; message: string } | null>(null);
   // Session boundaries (London/NY/Tokyo) are defined in UTC hours, so match against the UTC time,
   // not the raw broker wall-clock the field holds. Guard the ISO call against a not-yet-complete
@@ -224,15 +237,16 @@ export function TradeForm({
     };
 
     if (isEdit) {
-      // Edit sends every optional field explicitly, `null` when the user cleared it — otherwise a
-      // cleared field is just omitted and the server keeps the old value (you could never remove
-      // a swap/commission/exit once set).
-      input.exitPrice = exitPrice !== "" ? Number(exitPrice) : null;
-      input.exitTime = exitTimeIso;
-      input.swap = swap !== "" ? Number(swap) : null;
-      input.commission = commission !== "" ? Number(commission) : null;
-      input.notes = notes !== "" ? notes : null;
-      input.pnl = overridePnl;
+      // Send an optional field only if the user actually changed it: a value they set, or `null`
+      // when they cleared one that had a value. Untouched fields are omitted so the server keeps
+      // them exactly as stored (a blanket "send everything" could e.g. reopen a closed trade
+      // whose exit-price field renders empty).
+      if (exitPrice !== initial.exitPrice) input.exitPrice = exitPrice !== "" ? Number(exitPrice) : null;
+      if (exitDateTime !== initial.exitDateTime) input.exitTime = exitTimeIso;
+      if (swap !== initial.swap) input.swap = swap !== "" ? Number(swap) : null;
+      if (commission !== initial.commission) input.commission = commission !== "" ? Number(commission) : null;
+      if (notes !== initial.notes) input.notes = notes !== "" ? notes : null;
+      if (pnlOverride !== initial.pnlOverride || manualPnl !== initial.manualPnl) input.pnl = overridePnl;
       updateTrade.mutate({ id: trade.id, input }, {
         onSuccess: () => handleSuccess("Trade updated successfully"),
       });
