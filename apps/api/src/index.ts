@@ -22,6 +22,13 @@ async function start() {
     origin: corsOrigins,
   });
 
+  // Every response here is private, per-user, and changes on any mutation — none of it is ever
+  // safe to cache. Without this, iOS Safari (and in-app webviews) serve stale GET /api/trades
+  // responses from their HTTP cache, so an edit looks like it "didn't save" until a hard reload.
+  app.addHook("onSend", async (_request, reply) => {
+    reply.header("Cache-Control", "no-store");
+  });
+
   app.get("/health", async () => ({ status: "ok" }));
 
   // Auth is only required inside this scope, so /health stays up even

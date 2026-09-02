@@ -13,6 +13,11 @@ export class ApiError extends Error {
 async function request<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
+    // Never serve API data from the browser's HTTP cache — it's per-user and changes on every
+    // mutation. iOS Safari in particular will otherwise hand back a stale GET after an edit, so
+    // React Query's post-mutation refetch sees the old list. Pairs with Cache-Control: no-store
+    // on the API side.
+    cache: "no-store",
     headers: {
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
