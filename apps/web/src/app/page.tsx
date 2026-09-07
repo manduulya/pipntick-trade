@@ -9,6 +9,7 @@ import SiteFooter from "./_components/SiteFooter";
 export const metadata: Metadata = {
   description:
     "A trading journal for logging every trade, spotting green and red days on a calendar, and tracking your win rate, profit factor, and P&L over weekly, monthly, and yearly ranges.",
+  alternates: { canonical: "/" },
 };
 
 const steps = [

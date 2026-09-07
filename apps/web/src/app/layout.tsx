@@ -20,7 +20,8 @@ export const metadata: Metadata = {
     "pipntick is a trading journal that helps you log every trade, review them on a calendar, and analyse your win rate, profit factor, and P&L over time.",
   applicationName: "pipntick",
   keywords: ["trading journal", "trade log", "forex journal", "trading analytics", "performance tracking", "MT4", "MT5"],
-  alternates: { canonical: "/" },
+  // No global `alternates.canonical` — it would make every page claim the homepage as its
+  // canonical. Each indexable page sets its own; auth/utility pages set `robots: noindex`.
   openGraph: {
     type: "website",
     url: SITE_URL,
