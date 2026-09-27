@@ -1,4 +1,16 @@
-import type { CreateAccountInput, CreateTradeInput, ParsedTradeScreenshot, Quote, Trade, TradingAccount } from "@pipntick/shared";
+import type {
+  CreateAccountInput,
+  CreatePlanInput,
+  CreateTradeInput,
+  ParsedTradeScreenshot,
+  Quote,
+  SaveRulesInput,
+  Trade,
+  TradePlan,
+  TradingAccount,
+  TradingRule,
+  UpdatePlanInput,
+} from "@pipntick/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -65,5 +77,19 @@ export const api = {
   },
   quote: {
     get: (token: string | null) => request<Quote>("/api/quote", token),
+  },
+  rules: {
+    list: (token: string | null, accountId: string) => request<TradingRule[]>(`/api/rules?accountId=${accountId}`, token),
+    save: (token: string | null, accountId: string, rules: SaveRulesInput) =>
+      request<TradingRule[]>(`/api/rules?accountId=${accountId}`, token, { method: "PUT", body: JSON.stringify(rules) }),
+  },
+  plans: {
+    list: (token: string | null, accountId: string, from: string, to: string) =>
+      request<TradePlan[]>(`/api/plans?accountId=${accountId}&from=${from}&to=${to}`, token),
+    create: (token: string | null, input: CreatePlanInput) =>
+      request<TradePlan>("/api/plans", token, { method: "POST", body: JSON.stringify(input) }),
+    update: (token: string | null, id: string, input: UpdatePlanInput) =>
+      request<TradePlan>(`/api/plans/${id}`, token, { method: "PATCH", body: JSON.stringify(input) }),
+    remove: (token: string | null, id: string) => request<void>(`/api/plans/${id}`, token, { method: "DELETE" }),
   },
 };

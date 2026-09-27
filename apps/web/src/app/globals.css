@@ -339,6 +339,93 @@ html {
   border-radius: 3px;
 }
 
+/* ─── Trade Plan tiles (trade-plan/_components/PlanTile.tsx) ───────────────────────────────── */
+
+/* Expand/collapse: each face of a tile sits in a one-row grid whose row animates 0fr <-> 1fr, which
+   transitions to/from the content's natural height (no fixed max-height guess needed). The child
+   must be `min-height: 0; overflow: hidden` for the 0fr state to actually clip. */
+.plan-fold {
+  display: grid;
+  transition: grid-template-rows 0.38s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+}
+
+/* Waterfall reveal inside an expanded tile: each section gets `--i` (its order) and drops in a beat
+   after the previous one. On collapse the delay is dropped so everything folds away together. */
+.plan-cascade {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+  transition-delay: 0s;
+}
+
+[data-open="true"] .plan-cascade {
+  opacity: 1;
+  transform: none;
+  transition-delay: calc(var(--i, 0) * 30ms + 60ms);
+}
+
+/* Multiple-choice pills: the picked answer pops in beside the question; clearing it brings the
+   option row back one pill at a time (per-pill animation-delay set inline). */
+@keyframes plan-pill-pop {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes plan-pill-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.plan-pill-pop {
+  animation: plan-pill-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.plan-pill-in {
+  animation: plan-pill-in 0.24s ease both;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.plan-pill-in:hover {
+  border-color: var(--color-green-primary) !important;
+  color: var(--color-text-primary) !important;
+}
+
+/* Trade Plan scrollers (day columns, week row, rules drawer): a slim, track-less, rounded thumb
+   that stays faint until hovered, so seven side-by-side columns don't read as seven heavy
+   scrollbars. Both the standard properties (Firefox, and Chromium 121+, where they take
+   precedence) and the ::-webkit fallbacks (older Chromium/Safari) are set. */
+.plan-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.plan-scroll:hover,
+.plan-scroll:focus-within {
+  scrollbar-color: var(--color-border-hover) transparent;
+}
+
+.plan-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.plan-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.plan-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 999px;
+}
+
+.plan-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: var(--color-border-hover);
+}
+
+.plan-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-green-primary);
+}
+
 /* Respect the OS-level motion preference across the app — neutralizes both CSS transitions/
    animations and the inline-style transitions used by hand-rolled fades (e.g. QuoteBar,
    PageTransition), since author-stylesheet !important beats an inline style without one. */

@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import type { CreateTradeInput, ParsedTradeScreenshot, Trade } from "@pipntick/shared";
-import { getContractSize } from "@pipntick/shared";
+import { getContractSize, getFuturesContract } from "@pipntick/shared";
 import { useCreateTrade, useUpdateTrade } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
 import { ApiError } from "../../../lib/api";
 import { brokerWallClockToUtc, formatUtcOffsetLabel } from "../../../lib/time-format";
 import { detectSession, toDatetimeLocal } from "../../../lib/trade-utils";
 import InstrumentInput from "../InstrumentInput";
+import { findInstrument, loadStockInstruments } from "../../../lib/instruments";
 import DateTimePicker from "./DateTimePicker";
 
 // Shared by Dashboard's inline quick-add panel and Journal's Add/Edit modal — both wrap this in
@@ -64,6 +65,7 @@ export function TradeForm({
   prefill,
   onSaved,
   onDone,
+  onCreated,
 }: {
   /** Present -> edit an existing trade. Absent -> create a new one. */
   trade?: Trade;
@@ -73,6 +75,8 @@ export function TradeForm({
   /** Closes the surrounding modal on success. Omit for a persistent inline panel (e.g. Dashboard's
    * quick-add card) — the form resets itself in place instead so it's ready for the next entry. */
   onDone?: () => void;
+  /** Create mode only: receives the newly created trade (e.g. so Trade Plan can link to it). */
+  onCreated?: (trade: Trade) => void;
 }) {
   const isEdit = !!trade;
   const createTrade = useCreateTrade();
@@ -127,6 +131,7 @@ export function TradeForm({
   const [pnlOverride, setPnlOverride] = useState(trade?.pnlManual ?? false);
   const [manualPnl, setManualPnl] = useState(trade?.pnl ?? "");
   const [missingFields, setMissingFields] = useState<string[]>([]);
+  const [unlistedSymbol, setUnlistedSymbol] = useState(false);
 
   // The exact string values the edit form opened with, so submit can send only the optional
   // fields the user actually changed. Sending every optional every time re-asserts the whole
@@ -173,6 +178,10 @@ export function TradeForm({
 
   const missingInputStyle = { ...inputStyle, border: "1px solid var(--color-danger)" };
 
+  // Futures are sized in whole contracts and P&L scales by the contract's point value (see
+  // FUTURES_CONTRACTS in @pipntick/shared), so relabel the size field and show what a point is worth.
+  const futures = getFuturesContract(symbol);
+
   const computedPnl =
     entryPrice !== "" && exitPrice !== "" && lotSize !== ""
       ? (direction === "long" ? Number(exitPrice) - Number(entryPrice) : Number(entryPrice) - Number(exitPrice)) *
@@ -186,7 +195,7 @@ export function TradeForm({
     setSymbol(""); setEntryPrice(""); setExitPrice("");
     setEntryDateTime(""); setExitDateTime(""); setLotSize("");
     setSwap(""); setCommission(""); setNotes("");
-    setPnlOverride(false); setManualPnl(""); setMissingFields([]); setDateError(null);
+    setPnlOverride(false); setManualPnl(""); setMissingFields([]); setDateError(null); setUnlistedSymbol(false);
   }
 
   function handleSuccess(message: string) {
@@ -195,18 +204,29 @@ export function TradeForm({
     else resetFields();
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     const missing: string[] = [];
     if (!symbol) missing.push("Instrument");
     if (!entryPrice) missing.push("Entry Price");
+    if (!exitPrice) missing.push("Exit Price");
     if (!lotSize) missing.push("Lot Size");
     if (!entryDateTime) missing.push("Entry Date & Time");
     if (missing.length > 0) {
       setMissingFields(missing);
       return;
     }
+
+    // Only listed instruments can be traded — free text would silently get the wrong contract size.
+    // Wait for the lazily-fetched stock list so a valid stock ticker isn't rejected mid-load.
+    await loadStockInstruments();
+    const instrument = findInstrument(symbol);
+    if (!instrument) {
+      setUnlistedSymbol(true);
+      return;
+    }
+    if (instrument.symbol !== symbol) setSymbol(instrument.symbol);
 
     const entryDateIssue = validateDate(entryDateTime);
     if (entryDateIssue) {
@@ -228,7 +248,7 @@ export function TradeForm({
     const overridePnl = pnlOverride && manualPnl !== "" ? Number(manualPnl) : null;
 
     const input: CreateTradeInput = {
-      symbol,
+      symbol: instrument.symbol,
       direction,
       entryPrice: Number(entryPrice),
       lotSize: Number(lotSize),
@@ -258,7 +278,10 @@ export function TradeForm({
       if (notes) input.notes = notes;
       if (overridePnl !== null) input.pnl = overridePnl;
       createTrade.mutate(input, {
-        onSuccess: () => handleSuccess("Trade added successfully"),
+        onSuccess: (created) => {
+          onCreated?.(created);
+          handleSuccess("Trade added successfully");
+        },
       });
     }
   }
@@ -267,9 +290,19 @@ export function TradeForm({
     <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
       <InstrumentInput
         value={symbol}
-        onChange={(v) => { setSymbol(v); clearMissing("Instrument"); }}
-        style={missingFields.includes("Instrument") ? missingInputStyle : inputStyle}
+        onChange={(v) => { setSymbol(v); clearMissing("Instrument"); setUnlistedSymbol(false); }}
+        style={missingFields.includes("Instrument") || unlistedSymbol ? missingInputStyle : inputStyle}
       />
+      {unlistedSymbol && (
+        <p className="text-[10px] -mt-2" style={{ color: "var(--color-danger)" }}>
+          &ldquo;{symbol}&rdquo; isn&rsquo;t a listed instrument — pick one from the suggestions.
+        </p>
+      )}
+      {futures && (
+        <p className="text-[10px] -mt-2" style={{ color: "var(--color-text-muted)" }}>
+          {futures.name} futures · <span style={{ color: "var(--color-green-primary)" }}>${futures.pointValue.toLocaleString("en-US")} per point</span> per contract
+        </p>
+      )}
       <div className="flex rounded-lg p-0.5 gap-0.5" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
         {(["long", "short"] as const).map((d) => (
           <button key={d} type="button" onClick={() => setDirection(d)} className="flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-all"
@@ -284,7 +317,7 @@ export function TradeForm({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Price</label><input type="number" step="any" placeholder="0.00" value={entryPrice} onChange={(e) => { setEntryPrice(e.target.value); clearMissing("Entry Price"); }} style={missingFields.includes("Entry Price") ? missingInputStyle : inputStyle} /></div>
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Price</label><input type="number" step="any" placeholder="0.00 (optional)" value={exitPrice} onChange={(e) => setExitPrice(e.target.value)} style={inputStyle} /></div>
+        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Price</label><input type="number" step="any" placeholder="0.00" value={exitPrice} onChange={(e) => { setExitPrice(e.target.value); clearMissing("Exit Price"); }} style={missingFields.includes("Exit Price") ? missingInputStyle : inputStyle} /></div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Date & Time ({tzLabel})</label><DateTimePicker tzLabel={tzLabel} min={minDateTime} max={maxDateTime} value={entryDateTime} onChange={(v) => { setEntryDateTime(v); clearMissing("Entry Date & Time"); setDateError(null); }} style={missingFields.includes("Entry Date & Time") || dateError?.field === "Entry Date & Time" ? missingInputStyle : inputStyle} /></div>
@@ -294,7 +327,7 @@ export function TradeForm({
         <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Session</span>
         <span className="text-[11px] font-semibold" style={{ color: session ? "var(--color-green-primary)" : "var(--color-text-disabled)" }}>{session || "— enter entry time"}</span>
       </div>
-      <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Lot Size</label><input type="number" step="any" placeholder="0.01" value={lotSize} onChange={(e) => { setLotSize(e.target.value); clearMissing("Lot Size"); }} style={missingFields.includes("Lot Size") ? missingInputStyle : inputStyle} /></div>
+      <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>{futures ? "Contracts" : "Lot Size"}</label><input type="number" step={futures ? 1 : "any"} min={futures ? 1 : undefined} placeholder={futures ? "1" : "0.01"} value={lotSize} onChange={(e) => { setLotSize(e.target.value); clearMissing("Lot Size"); }} style={missingFields.includes("Lot Size") ? missingInputStyle : inputStyle} /></div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Swap</label><input type="number" step="any" placeholder="0.00 (optional)" value={swap} onChange={(e) => setSwap(e.target.value)} style={inputStyle} /></div>
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Commission / Charges</label><input type="number" step="any" placeholder="0.00 (optional)" value={commission} onChange={(e) => setCommission(e.target.value)} style={inputStyle} /></div>
@@ -321,7 +354,7 @@ export function TradeForm({
       <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Notes</label><textarea placeholder="Trade notes, setup, emotions..." rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, resize: "none" }} /></div>
       {missingFields.length > 0 && (
         <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>
-          Missing required field{missingFields.length > 1 ? "s" : ""}: {missingFields.join(", ")}
+          Missing required field{missingFields.length > 1 ? "s" : ""}: {missingFields.map((f) => (f === "Lot Size" && futures ? "Contracts" : f)).join(", ")}
         </p>
       )}
       {dateError && (

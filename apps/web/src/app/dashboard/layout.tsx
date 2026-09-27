@@ -26,6 +26,16 @@ const navItems = [
     ),
   },
   {
+    label: "Trade Plan",
+    href: "/dashboard/trade-plan",
+    icon: (
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 11l3 3 8-8" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2h9" />
+      </svg>
+    ),
+  },
+  {
     label: "Performance",
     href: "/dashboard/performance",
     icon: (
