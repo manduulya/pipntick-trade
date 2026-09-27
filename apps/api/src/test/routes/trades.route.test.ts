@@ -251,6 +251,27 @@ describe("POST /api/trades", () => {
     expect(Number(inserted.pnl)).toBe(999);
     expect(inserted.pnlManual).toBe(true);
   });
+
+  it("stores the mistake flag, defaulting to false", async () => {
+    const app = await buildApp();
+    const base = { symbol: "EUR/USD", direction: "long", entryPrice: 1.1, exitPrice: 1.09, lotSize: 1, entryTime: "2026-03-15T10:00:00.000Z" };
+    await app.inject({ method: "POST", url: "/api/trades", payload: base });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((getLastInsertValues() as any).isMistake).toBe(false);
+    await app.inject({ method: "POST", url: "/api/trades", payload: { ...base, isMistake: true, notes: "Chased the entry" } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((getLastInsertValues() as any).isMistake).toBe(true);
+  });
+
+  it("rejects a non-boolean isMistake", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/trades",
+      payload: { symbol: "EUR/USD", direction: "long", entryPrice: 1.1, lotSize: 1, entryTime: "2026-03-15T10:00:00.000Z", isMistake: "yes" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 describe("PATCH /api/trades/:id", () => {
@@ -331,6 +352,24 @@ describe("PATCH /api/trades/:id", () => {
     expect(updated.swap).toBeNull();
     expect(updated.commission).toBeNull();
     expect(Number(updated.pnl)).toBeCloseTo(500); // recomputed without the -2/-3 adjustments
+  });
+
+  it("keeps the mistake flag when omitted and changes it when sent", async () => {
+    const stored = {
+      trade: {
+        id: "t1", symbol: "EUR/USD", direction: "long", entryPrice: "1.1000", exitPrice: "1.0900", lotSize: "1",
+        swap: null, commission: null, pnl: "-1000.00", pnlManual: false, isMistake: true,
+        entryTime: new Date("2026-03-15T10:00:00.000Z"), exitTime: null, session: "London", notes: "Oversized", screenshotUrl: null,
+      },
+    };
+    setSelectResult([stored]);
+    const app = await buildApp();
+    await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { notes: "Oversized, no stop" } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((getLastUpdateSet() as any).isMistake).toBe(true);
+    await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { isMistake: false } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((getLastUpdateSet() as any).isMistake).toBe(false);
   });
 
   it("keeps the stored swap when the patch omits it entirely", async () => {

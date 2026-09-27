@@ -133,6 +133,8 @@ export type JournalRow = {
   session: string;
   duration: string;
   notes: string;
+  /** Flagged as a mistake by the trader — `notes` then describes the mistake. */
+  isMistake: boolean;
 };
 
 export function toJournalRow(t: Trade): JournalRow {
@@ -154,6 +156,7 @@ export function toJournalRow(t: Trade): JournalRow {
     session: t.session ?? "—",
     duration: formatDuration(t.entryTime, t.exitTime),
     notes: t.notes ?? "",
+    isMistake: t.isMistake ?? false,
   };
 }
 
@@ -171,7 +174,29 @@ export type PeriodStats = {
   tradesSub: string;
   avgDuration: string;
   avgDurationSub: string;
+  /** Average reward:risk, e.g. "2.06" — avg win ÷ |avg loss|; "—" without both wins and losses. */
+  rr: string;
+  rrSub: string;
+  /** Losses on trades flagged as mistakes, e.g. "-$340.00" (see mistakeCost). */
+  mistakeCost: string;
+  /** No losing mistakes in the period (drives the muted vs red color). */
+  mistakeCostZero: boolean;
+  mistakeSub: string;
 };
+
+/**
+ * Cost of mistakes: the summed P&L of **losing** trades flagged as mistakes (≤ 0). A mistake that
+ * happened to win doesn't reduce the cost — it was still a mistake.
+ */
+export function mistakeCost(closed: Trade[]): { cost: number; mistakes: number; lost: number } {
+  const mistakes = closed.filter((t) => t.isMistake);
+  const lostMistakes = mistakes.filter((t) => pnlOf(t) < 0);
+  return {
+    cost: lostMistakes.reduce((s, t) => s + pnlOf(t), 0),
+    mistakes: mistakes.length,
+    lost: lostMistakes.length,
+  };
+}
 
 export type InstrumentRow = { symbol: string; trades: number; pnl: number; winRate: number };
 export type DirectionRow = { direction: "Long" | "Short"; trades: number; pnl: number; winRate: number; avgPnl: number };
@@ -204,6 +229,9 @@ export function computePeriodStats(closed: Trade[], period: Period, offset: numb
         0,
       ) / withDuration.length
     : 0;
+  const avgWinAmt = wins.length ? grossProfit / wins.length : 0;
+  const avgLossAmt = losses.length ? grossLoss / losses.length : 0;
+  const mc = mistakeCost(closed);
 
   return {
     pnl: fmtCurrency(totalPnl),
@@ -217,6 +245,11 @@ export function computePeriodStats(closed: Trade[], period: Period, offset: numb
     tradesSub: periodLabel(period, offset),
     avgDuration: withDuration.length ? fmtDurationMinutes(avgDurationMinutes) : "—",
     avgDurationSub: "avg hold time",
+    rr: avgWinAmt > 0 && avgLossAmt > 0 ? (avgWinAmt / avgLossAmt).toFixed(2) : "—",
+    rrSub: "avg win ÷ avg loss",
+    mistakeCost: mc.cost < 0 ? fmtCurrency(mc.cost) : "$0.00",
+    mistakeCostZero: mc.cost === 0,
+    mistakeSub: mc.mistakes === 0 ? "no mistakes" : `${mc.mistakes} ${mc.mistakes === 1 ? "mistake" : "mistakes"} · ${mc.lost} lost`,
   };
 }
 

@@ -11,6 +11,7 @@ import {
   filterByPeriod,
   formatDuration,
   isClosed,
+  mistakeCost,
   periodLabel,
   periodOffsetFor,
   periodRange,
@@ -33,6 +34,7 @@ function makeTrade(overrides: Partial<Trade> = {}): Trade {
     lotSize: "1",
     pnl: "50.00",
     pnlManual: false,
+    isMistake: false,
     swap: null,
     commission: null,
     entryTime: "2026-03-15T10:00:00.000Z",
@@ -186,6 +188,51 @@ describe("toJournalRow", () => {
   it("falls back session to an em dash when unset", () => {
     const row = toJournalRow(makeTrade({ session: null }));
     expect(row.session).toBe("—");
+  });
+});
+
+describe("mistakes and reward:risk", () => {
+  it("counts only losing mistakes toward the cost", () => {
+    const trades = [
+      makeTrade({ id: "m-loss1", pnl: "-120.00", isMistake: true }),
+      makeTrade({ id: "m-loss2", pnl: "-80.00", isMistake: true }),
+      makeTrade({ id: "m-win", pnl: "300.00", isMistake: true }),
+      makeTrade({ id: "clean-loss", pnl: "-50.00" }),
+    ];
+    expect(mistakeCost(trades)).toEqual({ cost: -200, mistakes: 3, lost: 2 });
+    const stats = computePeriodStats(trades, "monthly", 0);
+    expect(stats.mistakeCost).toBe("-$200.00");
+    expect(stats.mistakeCostZero).toBe(false);
+    expect(stats.mistakeSub).toBe("3 mistakes · 2 lost");
+  });
+
+  it("handles a single winning mistake and no mistakes", () => {
+    const one = computePeriodStats([makeTrade({ pnl: "40.00", isMistake: true })], "monthly", 0);
+    expect(one.mistakeCost).toBe("$0.00");
+    expect(one.mistakeCostZero).toBe(true);
+    expect(one.mistakeSub).toBe("1 mistake · 0 lost");
+    expect(computePeriodStats([makeTrade({ pnl: "-10.00" })], "monthly", 0).mistakeSub).toBe("no mistakes");
+  });
+
+  it("reports average reward:risk as avg win ÷ avg loss", () => {
+    const trades = [
+      makeTrade({ id: "w1", pnl: "300.00" }),
+      makeTrade({ id: "w2", pnl: "193.50" }), // avg win 246.75
+      makeTrade({ id: "l1", pnl: "-119.80" }), // avg loss 119.80
+    ];
+    expect(computePeriodStats(trades, "monthly", 0).rr).toBe("2.06");
+  });
+
+  it("shows no reward:risk without both wins and losses", () => {
+    expect(computePeriodStats([makeTrade({ pnl: "50.00" })], "monthly", 0).rr).toBe("—");
+    expect(computePeriodStats([makeTrade({ pnl: "-50.00" })], "monthly", 0).rr).toBe("—");
+  });
+
+  it("carries the mistake flag onto journal rows", () => {
+    expect(toJournalRow(makeTrade({ isMistake: true })).isMistake).toBe(true);
+    // An older API response without the field reads as not-a-mistake.
+    const legacy = { ...makeTrade(), isMistake: undefined } as unknown as Trade;
+    expect(toJournalRow(legacy).isMistake).toBe(false);
   });
 });
 

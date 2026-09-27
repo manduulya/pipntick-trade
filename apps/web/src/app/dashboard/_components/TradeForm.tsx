@@ -128,6 +128,8 @@ export function TradeForm({
   const [swap, setSwap] = useState(trade?.swap ?? (prefill?.swap != null ? String(prefill.swap) : ""));
   const [commission, setCommission] = useState(trade?.commission ?? (prefill?.commission != null ? String(prefill.commission) : ""));
   const [notes, setNotes] = useState(trade?.notes ?? "");
+  // "Mistake?" — when ticked, Notes becomes the (required) description of the mistake.
+  const [isMistake, setIsMistake] = useState(trade?.isMistake ?? false);
   const [pnlOverride, setPnlOverride] = useState(trade?.pnlManual ?? false);
   const [manualPnl, setManualPnl] = useState(trade?.pnl ?? "");
   const [missingFields, setMissingFields] = useState<string[]>([]);
@@ -142,6 +144,7 @@ export function TradeForm({
     swap: trade?.swap ?? "",
     commission: trade?.commission ?? "",
     notes: trade?.notes ?? "",
+    isMistake: trade?.isMistake ?? false,
     pnlOverride: trade?.pnlManual ?? false,
     manualPnl: trade?.pnl ?? "",
   };
@@ -194,7 +197,7 @@ export function TradeForm({
   function resetFields() {
     setSymbol(""); setEntryPrice(""); setExitPrice("");
     setEntryDateTime(""); setExitDateTime(""); setLotSize("");
-    setSwap(""); setCommission(""); setNotes("");
+    setSwap(""); setCommission(""); setNotes(""); setIsMistake(false);
     setPnlOverride(false); setManualPnl(""); setMissingFields([]); setDateError(null); setUnlistedSymbol(false);
   }
 
@@ -213,6 +216,7 @@ export function TradeForm({
     if (!exitPrice) missing.push("Exit Price");
     if (!lotSize) missing.push("Lot Size");
     if (!entryDateTime) missing.push("Entry Date & Time");
+    if (isMistake && !notes.trim()) missing.push("Mistake description");
     if (missing.length > 0) {
       setMissingFields(missing);
       return;
@@ -266,6 +270,7 @@ export function TradeForm({
       if (swap !== initial.swap) input.swap = swap !== "" ? Number(swap) : null;
       if (commission !== initial.commission) input.commission = commission !== "" ? Number(commission) : null;
       if (notes !== initial.notes) input.notes = notes !== "" ? notes : null;
+      if (isMistake !== initial.isMistake) input.isMistake = isMistake;
       if (pnlOverride !== initial.pnlOverride || manualPnl !== initial.manualPnl) input.pnl = overridePnl;
       updateTrade.mutate({ id: trade.id, input }, {
         onSuccess: () => handleSuccess("Trade updated successfully"),
@@ -276,6 +281,7 @@ export function TradeForm({
       if (swap) input.swap = Number(swap);
       if (commission) input.commission = Number(commission);
       if (notes) input.notes = notes;
+      if (isMistake) input.isMistake = true;
       if (overridePnl !== null) input.pnl = overridePnl;
       createTrade.mutate(input, {
         onSuccess: (created) => {
@@ -360,7 +366,41 @@ export function TradeForm({
           </div>
         )}
       </div>
-      <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Notes</label><textarea placeholder="Trade notes, setup, emotions..." rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, resize: "none" }} /></div>
+      <div className="flex flex-col gap-1">
+        {/* "Mistake?" sits on the Notes line (same label+checkbox pattern as P&L Override); when
+            ticked, Notes becomes the required description of the mistake. */}
+        <div className="flex items-center justify-between">
+          <label className="text-[10px]" style={{ color: isMistake ? "var(--color-danger)" : "var(--color-text-muted)" }}>
+            {isMistake ? "What was the mistake?" : "Notes"}
+          </label>
+          <label className="flex items-center gap-1.5 text-[10px] cursor-pointer" style={{ color: isMistake ? "var(--color-danger)" : "var(--color-text-muted)" }}>
+            <input
+              type="checkbox"
+              checked={isMistake}
+              onChange={(e) => { setIsMistake(e.target.checked); if (!e.target.checked) clearMissing("Mistake description"); }}
+              className="cursor-pointer"
+              style={{ accentColor: "var(--color-danger)" }}
+            />
+            Mistake?
+          </label>
+        </div>
+        <textarea
+          placeholder={isMistake ? "e.g. Entered before confirmation, moved my stop, oversized…" : "Trade notes, setup, emotions..."}
+          rows={3}
+          value={notes}
+          onChange={(e) => { setNotes(e.target.value); clearMissing("Mistake description"); }}
+          style={{
+            ...inputStyle,
+            resize: "none",
+            ...(isMistake
+              ? {
+                  border: `1px solid ${missingFields.includes("Mistake description") ? "var(--color-danger)" : "rgba(224,82,82,0.45)"}`,
+                  backgroundColor: "rgba(224,82,82,0.04)",
+                }
+              : {}),
+          }}
+        />
+      </div>
       {missingFields.length > 0 && (
         <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>
           Missing required field{missingFields.length > 1 ? "s" : ""}: {missingFields.map((f) => (f === "Lot Size" && futures ? "Contracts" : f)).join(", ")}

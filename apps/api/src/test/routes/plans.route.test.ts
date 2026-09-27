@@ -272,17 +272,22 @@ describe("PATCH /api/plans/:id — locked plans", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("allows undo: reopening a logged plan and unlinking its trade", async () => {
+  it("allows undo: reopening a logged plan keeps its trade link", async () => {
     queueSelect([{ plan: fakePlan({ status: "logged", grade: "A", journalTradeId: "trade-1" }) }]);
-    setUpdateResult([fakePlan({ grade: "A" })]);
+    setUpdateResult([fakePlan({ grade: "A", journalTradeId: "trade-1" })]);
     const app = await buildApp();
-    const res = await app.inject({
-      method: "PATCH",
-      url: "/api/plans/plan-1",
-      payload: { status: "planned", journalTradeId: null },
-    });
+    const res = await app.inject({ method: "PATCH", url: "/api/plans/plan-1", payload: { status: "planned" } });
     expect(res.statusCode).toBe(200);
-    expect(getLastUpdateSet()).toMatchObject({ status: "planned", journalTradeId: null });
+    expect(getLastUpdateSet()).toMatchObject({ status: "planned", journalTradeId: "trade-1" });
+  });
+
+  it("re-locks a reopened, still-linked plan without a new trade (Mark as logged)", async () => {
+    queueSelect([{ plan: fakePlan({ status: "planned", grade: "A", direction: "short", journalTradeId: "trade-1" }) }]);
+    setUpdateResult([fakePlan({ status: "logged", grade: "A", direction: "short", journalTradeId: "trade-1" })]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "PATCH", url: "/api/plans/plan-1", payload: { status: "logged" } });
+    expect(res.statusCode).toBe(200);
+    expect(getLastUpdateSet()).toMatchObject({ status: "logged", journalTradeId: "trade-1", direction: "short" });
   });
 });
 

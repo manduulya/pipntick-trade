@@ -7,6 +7,7 @@ import { useTimeFormat } from "../../../lib/time-format-context";
 import { formatDate, formatDateTime } from "../../../lib/time-format";
 import { TradeForm } from "./TradeForm";
 import DeleteTradeModal from "./DeleteTradeModal";
+import MistakePill from "./MistakePill";
 import Toast from "../Toast";
 import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
 import { useSelectedAccount } from "../../../lib/account-context";
@@ -93,6 +94,7 @@ export default function DayTradesModal({
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-xs font-bold truncate" style={{ color: "var(--color-text-primary)" }}>{row.instrument}</span>
+                      {row.isMistake && <MistakePill />}
                       <span
                         className="shrink-0 px-2 py-0.5 rounded text-[10px] font-semibold"
                         style={{
@@ -126,7 +128,9 @@ export default function DayTradesModal({
 
                   {row.notes && (
                     <p className="text-[11px] mb-2" style={{ color: "var(--color-text-secondary)" }}>
-                      <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Notes: </span>
+                      <span className="font-semibold" style={{ color: row.isMistake ? "var(--color-danger)" : "var(--color-text-primary)" }}>
+                        {row.isMistake ? "Mistake: " : "Notes: "}
+                      </span>
                       {row.notes}
                     </p>
                   )}

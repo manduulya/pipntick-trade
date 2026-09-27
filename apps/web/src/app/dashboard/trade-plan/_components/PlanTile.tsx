@@ -81,6 +81,8 @@ export default function PlanTile({
   // An archived account locks every tile too, with no Skip/Log/Undo — the whole account is read-only.
   const { readOnly: accountReadOnly } = useSelectedAccount();
   const locked = !isPlanned || accountReadOnly;
+  // Reopened via Undo → Keep trade: still attached to its Journal trade.
+  const linked = !!plan.journalTradeId;
 
   function patch(next: Partial<TradePlan>, input: UpdatePlanInput) {
     updatePlan.mutate({ next: { ...planRef.current, ...next }, input });
@@ -123,16 +125,29 @@ export default function PlanTile({
     onToggle();
   }
 
-  /** Reopens a skipped/logged plan for editing. `deleteTrade` also removes the linked Journal
-   * trade (asked explicitly — undoing a log doesn't by itself mean the trade didn't happen). */
+  /** Reopens a skipped/logged plan for editing. The plan keeps its link to the Journal trade
+   * (journal_trade_id), so "Mark as logged" can re-lock it later without re-entering the trade.
+   * `deleteTrade` instead deletes that trade too, leaving a plain planned plan. */
   function undo(deleteTrade = false) {
     const tradeId = plan.journalTradeId;
-    const reopen = () => {
-      setUndoAsk(false);
-      patch({ status: "planned", journalTradeId: null }, { status: "planned", journalTradeId: null });
-    };
-    if (deleteTrade && tradeId) deleteJournalTrade.mutate(tradeId, { onSuccess: reopen });
-    else reopen();
+    if (deleteTrade && tradeId) {
+      // The FK is ON DELETE SET NULL, so the server clears the link itself; mirror that locally.
+      deleteJournalTrade.mutate(tradeId, {
+        onSuccess: () => {
+          setUndoAsk(false);
+          patch({ status: "planned", journalTradeId: null }, { status: "planned" });
+        },
+      });
+      return;
+    }
+    setUndoAsk(false);
+    patch({ status: "planned" }, { status: "planned" });
+  }
+
+  /** Re-locks a reopened plan that still has its Journal trade — no form, no duplicate trade. */
+  function markLogged() {
+    patch({ status: "logged" }, { status: "logged" });
+    onToggle();
   }
 
   // Only still-open plans move between days (skipped/logged are records of that day). The API
@@ -429,7 +444,8 @@ export default function PlanTile({
         ) : isPlanned ? (
           <div className="plan-cascade flex flex-col gap-2.5" style={cascade(afterRules + 1)}>
             <div className="flex gap-1.5">
-              <button
+              {/* A plan that still has its Journal trade was taken, not skipped — no Skip option. */}
+              {!linked && <button
                 type="button"
                 onClick={() => { if (instrument) { commitSymbol(instrument.symbol); skip(); } }}
                 disabled={!instrument}
@@ -442,13 +458,14 @@ export default function PlanTile({
                 }}
               >
                 Skip this trade
-              </button>
+              </button>}
               <button
                 type="button"
                 onClick={() => {
                   if (!instrument) return;
                   commitSymbol(instrument.symbol);
-                  onLog({ ...plan, symbol: instrument.symbol });
+                  if (linked) markLogged();
+                  else onLog({ ...plan, symbol: instrument.symbol });
                 }}
                 disabled={!plan.grade || !instrument}
                 className="focus-ring press-scale flex-1 py-2 px-1 rounded-lg text-xs font-extrabold"
@@ -458,9 +475,15 @@ export default function PlanTile({
                     : { backgroundColor: "var(--color-border-subtle)", color: "var(--color-text-muted)", cursor: "not-allowed" }
                 }
               >
-                Log to Journal
+                {linked ? "Mark as logged" : "Log to Journal"}
               </button>
             </div>
+            {linked && instrument && plan.grade && (
+              <span className="text-[11px] text-center flex items-center justify-center gap-1" style={{ color: "var(--color-text-muted)" }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"><path d="M10 13a5 5 0 007.5.5l3-3a5 5 0 00-7-7l-1.5 1.5M14 11a5 5 0 00-7.5-.5l-3 3a5 5 0 007 7l1.5-1.5" /></svg>
+                Still linked to its Journal trade
+              </span>
+            )}
             {(!instrument || !plan.grade) && (
               <span className="text-[11px] text-center" style={{ color: symbolError ? "var(--color-danger)" : "var(--color-text-secondary)" }}>
                 {!instrument
@@ -500,7 +523,7 @@ export default function PlanTile({
                 style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}
               >
                 <span className="text-[12px] leading-snug" style={{ color: "var(--color-text-primary)" }}>
-                  Reopen this plan. What about the trade in your Journal?
+                  Reopen this plan to edit it. Keep the Journal trade linked, or delete it?
                 </span>
                 <div className="flex gap-1.5">
                   <button

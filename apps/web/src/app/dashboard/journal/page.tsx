@@ -13,6 +13,7 @@ import { useTimeFormat } from "../../../lib/time-format-context";
 import { formatDate } from "../../../lib/time-format";
 import { TradeForm, type EntryMethod, entryTabs } from "../_components/TradeForm";
 import DeleteTradeModal from "../_components/DeleteTradeModal";
+import MistakePill from "../_components/MistakePill";
 import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
 
 type SortKey = "date" | "instrument" | "direction" | "pnl" | "duration";
@@ -186,7 +187,7 @@ export default function JournalPage() {
   const { accounts, readOnly } = useSelectedAccount();
   const { timeFormat } = useTimeFormat();
   const [search, setSearch]     = useState("");
-  const [filter, setFilter]     = useState<"all" | "long" | "short" | "win" | "loss">("all");
+  const [filter, setFilter]     = useState<"all" | "long" | "short" | "win" | "loss" | "mistakes">("all");
   const [sortKey, setSortKey]   = useState<SortKey>("date");
   const [sortDir, setSortDir]   = useState<SortDir>("desc");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -212,6 +213,7 @@ export default function JournalPage() {
         filter === "long"  ? t.direction === "Long" :
         filter === "short" ? t.direction === "Short" :
         filter === "win"   ? (t.pnl ?? 0) > 0 :
+        filter === "mistakes" ? t.isMistake :
         (t.pnl ?? 0) < 0;
       return matchSearch && matchFilter;
     })
@@ -262,7 +264,7 @@ export default function JournalPage() {
 
         {/* Filter tabs */}
         <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}>
-          {(["all", "long", "short", "win", "loss"] as const).map((f) => (
+          {(["all", "long", "short", "win", "loss", "mistakes"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -364,7 +366,12 @@ export default function JournalPage() {
                       onMouseLeave={(e) => (e.currentTarget as HTMLTableRowElement).style.backgroundColor = "transparent"}
                     >
                       <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{formatDate(t.date, timeFormat)}</td>
-                      <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: "var(--color-text-primary)" }}>{t.instrument}</td>
+                      <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: "var(--color-text-primary)" }}>
+                        <span className="inline-flex items-center gap-1.5">
+                          {t.instrument}
+                          {t.isMistake && <MistakePill />}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
                           className="px-2 py-0.5 rounded text-[11px] font-semibold"
@@ -394,8 +401,10 @@ export default function JournalPage() {
                         <td colSpan={11} className="px-6 py-3">
                           <div className="flex items-center justify-between gap-4">
                             <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-                              <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Notes: </span>
-                              {t.notes || "No notes for this trade."}
+                              <span className="font-semibold" style={{ color: t.isMistake ? "var(--color-danger)" : "var(--color-text-primary)" }}>
+                                {t.isMistake ? "Mistake: " : "Notes: "}
+                              </span>
+                              {t.notes || (t.isMistake ? "No description recorded." : "No notes for this trade.")}
                             </p>
                             {!readOnly && <div className="shrink-0 flex items-center gap-2">
                               <button

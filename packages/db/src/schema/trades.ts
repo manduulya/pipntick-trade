@@ -18,6 +18,10 @@ export const trades = pgTable("trades", {
   lotSize: numeric("lot_size", { precision: 18, scale: 8 }).notNull(),
   pnl: numeric("pnl", { precision: 18, scale: 2 }),
   pnlManual: boolean("pnl_manual").notNull().default(false),
+  // Flagged by the trader as a mistake; `notes` then holds what the mistake was. Feeds the
+  // Performance page's "Cost of Mistakes" (losing mistake trades only — see mistakeCost in
+  // apps/web/src/lib/trade-utils.ts).
+  isMistake: boolean("is_mistake").notNull().default(false),
   // Signed broker adjustments (negative = a cost, matching how brokers display them), folded
   // into pnl at write time — see computePnl in apps/api/src/routes/trades.ts.
   swap: numeric("swap", { precision: 18, scale: 2 }),
