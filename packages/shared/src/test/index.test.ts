@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { getContractSize, getFuturesContract, isRuleMet } from "../index";
+import { getContractSize, getFuturesContract, isReadOnlyAccount, isRuleMet } from "../index";
+
+describe("isReadOnlyAccount", () => {
+  it("is true only for archived accounts", () => {
+    expect(isReadOnlyAccount({ status: "archived" })).toBe(true);
+    expect(isReadOnlyAccount({ status: "inactive" })).toBe(false);
+    expect(isReadOnlyAccount({ status: "active" })).toBe(false);
+    expect(isReadOnlyAccount(null)).toBe(false);
+  });
+});
 
 describe("futures", () => {
   it("uses the contract's dollar point value as its size", () => {

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { TradingAccount } from "@pipntick/shared";
+import { isReadOnlyAccount } from "@pipntick/shared";
 import { useAccounts } from "./hooks";
 
 const STORAGE_KEY = "pipntick_selected_account_id";
@@ -12,6 +13,9 @@ type AccountContextValue = {
   accountsError: unknown;
   selectedAccountId: string | null;
   selectedAccount: TradingAccount | null;
+  /** The selected account is archived: history is viewable but nothing can be added or edited
+   * (the API rejects writes with 409 — this just lets the UI hide dead-end controls). */
+  readOnly: boolean;
   setSelectedAccountId: (id: string) => void;
 };
 
@@ -27,9 +31,12 @@ export function SelectedAccountProvider({ children }: { children: React.ReactNod
     const storedValid = stored ? accounts.some((a) => a.id === stored) : false;
 
     if (storedValid) {
+      // An explicitly chosen account stays selected even if it's archived — that's how its
+      // history is browsed. Only the fallback below avoids archived accounts.
       setSelectedAccountIdState(stored);
     } else {
-      const fallback = accounts.find((a) => a.isDefault) ?? accounts[0] ?? null;
+      const fallback =
+        accounts.find((a) => a.isDefault) ?? accounts.find((a) => a.status !== "archived") ?? accounts[0] ?? null;
       setSelectedAccountIdState(fallback?.id ?? null);
       if (fallback) localStorage.setItem(STORAGE_KEY, fallback.id);
     }
@@ -52,6 +59,7 @@ export function SelectedAccountProvider({ children }: { children: React.ReactNod
       accountsError: isError ? error : null,
       selectedAccountId,
       selectedAccount,
+      readOnly: isReadOnlyAccount(selectedAccount),
       setSelectedAccountId,
     }),
     [accounts, isLoading, isError, error, selectedAccountId, selectedAccount, setSelectedAccountId],

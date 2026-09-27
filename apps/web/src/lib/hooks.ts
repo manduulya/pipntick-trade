@@ -8,6 +8,7 @@ import type {
   SaveRulesInput,
   TradePlan,
   TradingAccount,
+  UpdateAccountInput,
   UpdatePlanInput,
 } from "@pipntick/shared";
 import { api } from "./api";
@@ -91,12 +92,14 @@ export function useUpdateAccount() {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, input }: { id: string; input: Partial<CreateAccountInput> }) =>
+    mutationFn: async ({ id, input }: { id: string; input: UpdateAccountInput }) =>
       api.accounts.update(await getToken(), id, input),
     onSuccess: (account) => {
       queryClient.setQueryData(["accounts"], (old: TradingAccount[] | undefined) =>
         old ? old.map((a) => (a.id === account.id ? account : a)) : [account],
       );
+      // Refetch regardless: a status/default change can move the default to another account
+      // (and re-sorts the list).
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
     },
   });
@@ -113,6 +116,8 @@ export function useDeleteTradingAccount() {
       );
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["trades"] });
+      queryClient.invalidateQueries({ queryKey: ["plans"] });
+      queryClient.invalidateQueries({ queryKey: ["rules"] });
     },
   });
 }

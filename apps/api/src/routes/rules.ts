@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { asc, eq } from "drizzle-orm";
 import { db, tradingRules } from "@pipntick/db";
 import { getUserId } from "../lib/auth.js";
-import { resolveAccountId } from "../lib/resolve-account.js";
+import { resolveAccount, resolveAccountId } from "../lib/resolve-account.js";
+import { ARCHIVED_ACCOUNT_ERROR, isArchived } from "../lib/account-guard.js";
 
 type RuleType = "check" | "choice";
 type RuleBody = { text?: unknown; type?: unknown; options?: unknown };
@@ -69,8 +70,10 @@ export async function ruleRoutes(app: FastifyInstance) {
     if (!userId) return reply.code(401).send({ error: "Unauthorized" });
 
     const query = request.query as { accountId?: string };
-    const accountId = await resolveAccountId(userId, query.accountId);
-    if (!accountId) return reply.code(404).send({ error: "Account not found" });
+    const account = await resolveAccount(userId, query.accountId);
+    if (!account) return reply.code(404).send({ error: "Account not found" });
+    if (isArchived(account.status)) return reply.code(409).send({ error: ARCHIVED_ACCOUNT_ERROR });
+    const accountId = account.id;
 
     const result = normalizeRules(request.body);
     if ("error" in result) return reply.code(400).send({ error: result.error });

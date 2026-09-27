@@ -92,7 +92,7 @@ flowchart TD
 | `/news` | Public | Market news & economic calendar |
 | `/dashboard` | Auth | Main dashboard |
 | `/dashboard/trade-plan` | Auth | Trade Plan — weekly pre-trade checklist board + My Rules |
-| `/accounts/new` | Auth | Add / create trading account |
+| `/accounts/new` | Auth | Add / create trading account (in-app: sidebar account switcher → Add account; each account has a status of Active / Inactive / Archived, and one is the default) |
 | `/trades/new` | Auth | Add trade (manual, CSV, screenshot, MT4) |
 | `/calendar` | Auth | Trading calendar |
 | `/performance` | Auth | Performance analytics |

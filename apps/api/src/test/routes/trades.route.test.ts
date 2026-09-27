@@ -454,6 +454,29 @@ describe("PATCH /api/trades/:id", () => {
   });
 });
 
+describe("archived accounts", () => {
+  it("refuses to add a trade to an archived account", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(getDefaultAccount).mockResolvedValue({ ...FAKE_ACCOUNT, status: "archived" } as any);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/trades",
+      payload: { symbol: "EUR/USD", direction: "long", entryPrice: 1.1, lotSize: 1, entryTime: "2026-01-01T10:00:00.000Z" },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("refuses to edit or delete a trade in an archived account", async () => {
+    setSelectResult([{ trade: { id: "t1" }, id: "t1", accountStatus: "archived" }]);
+    const app = await buildApp();
+    const edit = await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { notes: "x" } });
+    const del = await app.inject({ method: "DELETE", url: "/api/trades/t1" });
+    expect(edit.statusCode).toBe(409);
+    expect(del.statusCode).toBe(409);
+  });
+});
+
 describe("DELETE /api/trades/:id", () => {
   it("returns 401 without an authenticated user", async () => {
     vi.mocked(getUserId).mockReturnValue(null);

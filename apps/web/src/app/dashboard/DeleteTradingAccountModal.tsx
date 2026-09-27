@@ -10,10 +10,13 @@ export default function DeleteTradingAccountModal({
   account,
   onClose,
   onDeleted,
+  onArchiveInstead,
 }: {
   account: TradingAccount;
   onClose: () => void;
   onDeleted?: () => void;
+  /** Offered as the non-destructive alternative (omitted when the account is already archived). */
+  onArchiveInstead?: () => void;
 }) {
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
@@ -72,6 +75,25 @@ export default function DeleteTradingAccountModal({
             Delete <span style={{ color: "var(--color-text-primary)" }}>&quot;{account.name}&quot;</span> and every trade recorded in it?
             This cannot be undone.
           </p>
+
+          {onArchiveInstead && (
+            <div
+              className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5"
+              style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}
+            >
+              <span className="text-[11px] leading-snug" style={{ color: "var(--color-text-secondary)" }}>
+                Done with it but want to keep the history? Archive it instead. It stays viewable, read-only.
+              </span>
+              <button
+                type="button"
+                onClick={onArchiveInstead}
+                className="shrink-0 rounded-md px-3 py-1.5 text-[11px] font-semibold"
+                style={{ border: "1px solid var(--color-green-primary)", color: "var(--color-green-primary)" }}
+              >
+                Archive instead
+              </button>
+            </div>
+          )}
 
           {formError && (
             <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>{formError}</p>

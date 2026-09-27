@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { clerkClient } from "@clerk/fastify";
 import { db, tradingAccounts, users } from "@pipntick/db";
 
@@ -21,7 +21,8 @@ export async function getDefaultAccount(userId: string) {
     .select()
     .from(tradingAccounts)
     .where(eq(tradingAccounts.userId, userId))
-    .orderBy(desc(tradingAccounts.isDefault), asc(tradingAccounts.createdAt))
+    // Default first; otherwise never prefer an archived account while a usable one exists.
+    .orderBy(desc(tradingAccounts.isDefault), sql`${tradingAccounts.status} = 'archived'`, asc(tradingAccounts.createdAt))
     .limit(1);
   return existing ?? null;
 }

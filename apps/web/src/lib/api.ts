@@ -9,6 +9,7 @@ import type {
   TradePlan,
   TradingAccount,
   TradingRule,
+  UpdateAccountInput,
   UpdatePlanInput,
 } from "@pipntick/shared";
 
@@ -60,7 +61,7 @@ export const api = {
     list: (token: string | null) => request<TradingAccount[]>("/api/accounts", token),
     create: (token: string | null, input: CreateAccountInput) =>
       request<TradingAccount>("/api/accounts", token, { method: "POST", body: JSON.stringify(input) }),
-    update: (token: string | null, id: string, input: Partial<CreateAccountInput>) =>
+    update: (token: string | null, id: string, input: UpdateAccountInput) =>
       request<TradingAccount>(`/api/accounts/${id}`, token, { method: "PATCH", body: JSON.stringify(input) }),
     remove: (token: string | null, id: string) =>
       request<void>(`/api/accounts/${id}`, token, { method: "DELETE" }),

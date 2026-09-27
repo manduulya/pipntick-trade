@@ -9,6 +9,7 @@ import { TradeForm } from "./TradeForm";
 import DeleteTradeModal from "./DeleteTradeModal";
 import Toast from "../Toast";
 import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
+import { useSelectedAccount } from "../../../lib/account-context";
 
 // Opened from a MonthlyCalendar day cell that has trades recorded — same journal-style detail
 // fields as the Journal table/expanded row, just scoped to one day instead of the whole account.
@@ -33,6 +34,8 @@ export default function DayTradesModal({
   useLockBodyScroll();
 
   const { timeFormat } = useTimeFormat();
+  // Archived accounts are read-only — hide Edit/Delete rather than let them 409.
+  const { readOnly } = useSelectedAccount();
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -128,7 +131,7 @@ export default function DayTradesModal({
                     </p>
                   )}
 
-                  <div className="flex items-center gap-2">
+                  {!readOnly && <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setEditingTrade(t)}
@@ -151,7 +154,7 @@ export default function DayTradesModal({
                       </svg>
                       Delete
                     </button>
-                  </div>
+                  </div>}
                 </div>
               );
             })

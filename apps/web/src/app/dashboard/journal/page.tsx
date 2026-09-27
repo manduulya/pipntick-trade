@@ -183,7 +183,7 @@ export default function JournalPage() {
   // light backgrounds a white tint is effectively invisible, so flip to a dark tint there.
   const hoverOverlay = theme === "light" ? "0,0,0" : "255,255,255";
   const { data, isLoading, isError, error } = useTrades();
-  const { accounts } = useSelectedAccount();
+  const { accounts, readOnly } = useSelectedAccount();
   const { timeFormat } = useTimeFormat();
   const [search, setSearch]     = useState("");
   const [filter, setFilter]     = useState<"all" | "long" | "short" | "win" | "loss">("all");
@@ -281,16 +281,18 @@ export default function JournalPage() {
           ))}
         </div>
 
-        {/* Add Trade */}
-        <button
-          onClick={() => setShowModal(true)}
-          className="neon-btn flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold"
-        >
-          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          Add Trade
-        </button>
+        {/* Add Trade (hidden for archived accounts — read-only) */}
+        {!readOnly && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="neon-btn flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold"
+          >
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Trade
+          </button>
+        )}
 
         {/* Summary */}
         <div className="ml-auto flex items-center gap-3 sm:gap-4 flex-wrap">
@@ -395,7 +397,7 @@ export default function JournalPage() {
                               <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Notes: </span>
                               {t.notes || "No notes for this trade."}
                             </p>
-                            <div className="shrink-0 flex items-center gap-2">
+                            {!readOnly && <div className="shrink-0 flex items-center gap-2">
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -426,7 +428,7 @@ export default function JournalPage() {
                                 </svg>
                                 Delete
                               </button>
-                            </div>
+                            </div>}
                           </div>
                         </td>
                       </tr>

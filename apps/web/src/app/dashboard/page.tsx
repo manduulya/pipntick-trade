@@ -374,7 +374,7 @@ function AddTradeModal({ onClose, onSaved }: { onClose: () => void; onSaved: (me
 
 export default function DashboardPage() {
   const { data: trades, isLoading, isError, error } = useTrades();
-  const { accounts, selectedAccount } = useSelectedAccount();
+  const { accounts, selectedAccount, readOnly } = useSelectedAccount();
   const startingBalance = selectedAccount ? Number(selectedAccount.startingBalance) : 0;
 
   const [calendarOffset, setCalendarOffset] = useState(0);
@@ -439,7 +439,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between gap-3 lg:justify-start">
           <div className="flex items-center gap-3">
             <h1 className="text-base font-bold" style={{ color: "var(--color-text-primary)" }}>Dashboard</h1>
-            <button
+            {!readOnly && <button
               type="button"
               onClick={() => setShowAddTrade(true)}
               className="neon-btn hidden lg:flex shrink-0 items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold"
@@ -448,18 +448,21 @@ export default function DashboardPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
               Add Trade
-            </button>
+            </button>}
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAddTrade(true)}
-            className="neon-btn lg:hidden shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-semibold"
-          >
-            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Add Trade
-          </button>
+          {/* Hidden for archived accounts, which are read-only. */}
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => setShowAddTrade(true)}
+              className="neon-btn lg:hidden shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-semibold"
+            >
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Trade
+            </button>
+          )}
         </div>
         <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
           {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
