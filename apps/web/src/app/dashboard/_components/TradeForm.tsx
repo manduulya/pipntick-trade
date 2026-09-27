@@ -82,7 +82,7 @@ export function TradeForm({
   const createTrade = useCreateTrade();
   const updateTrade = useUpdateTrade();
   const mutation = isEdit ? updateTrade : createTrade;
-  const { selectedAccount } = useSelectedAccount();
+  const { selectedAccount, readOnly } = useSelectedAccount();
   // Trade times are entered, displayed, stored and day-bucketed in the account's broker-server
   // timezone (what the user sees on their platform / screenshots) — the raw wall-clock digits,
   // never converted, same as lib/trade-utils.ts documents. This offset is only used to shift back
@@ -284,6 +284,15 @@ export function TradeForm({
         },
       });
     }
+  }
+
+  // Archived account: every add/edit path funnels through this form, so it stands in for all of them.
+  if (readOnly) {
+    return (
+      <p className="text-xs text-center py-6 px-4 rounded-lg" style={{ color: "var(--color-text-secondary)", border: "1px dashed var(--color-border)" }}>
+        This account is archived, so trades can&rsquo;t be added or edited. Reactivate it to make changes.
+      </p>
+    );
   }
 
   return (

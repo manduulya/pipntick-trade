@@ -4,6 +4,10 @@ export type TradeDirection = "long" | "short";
 export type TradeStatus = "open" | "closed";
 export type TradeSource = "manual" | "screenshot" | "mt4";
 
+/** active = trading it now; inactive = paused but editable; archived = finished, read-only. */
+export type AccountStatus = "active" | "inactive" | "archived";
+export const ACCOUNT_STATUSES: readonly AccountStatus[] = ["active", "inactive", "archived"];
+
 export interface TradingAccount {
   id: string;
   userId: string;
@@ -11,7 +15,9 @@ export interface TradingAccount {
   broker: string | null;
   currency: string;
   startingBalance: string;
+  /** At most one per user, never an archived account. */
   isDefault: boolean;
+  status: AccountStatus;
   /** Broker platform's server timezone as an offset from UTC in minutes (e.g. 180 for UTC+3).
    * Null = unset, meaning screenshot-imported times are treated as literal UTC (legacy behavior). */
   brokerUtcOffsetMinutes: number | null;
@@ -134,6 +140,17 @@ export interface CreateAccountInput {
   /** Broker platform's server timezone as an offset from UTC in minutes (e.g. 180 for UTC+3).
    * Omit/undefined leaves it unchanged (update) or unset (create); pass null to explicitly clear it. */
   brokerUtcOffsetMinutes?: number | null;
+}
+
+export type UpdateAccountInput = Partial<CreateAccountInput> & {
+  status?: AccountStatus;
+  /** Only `true` is accepted — the default moves by making another account the default. */
+  isDefault?: true;
+};
+
+/** Archived accounts are kept for history only: no new or edited trades, plans or rules. */
+export function isReadOnlyAccount(account: Pick<TradingAccount, "status"> | null | undefined): boolean {
+  return account?.status === "archived";
 }
 
 export interface CreateTradeInput {

@@ -16,7 +16,8 @@ const CYAN = "#22d3ee";
 const GREEN = "#7cc943";
 
 export default function TradePlanPage() {
-  const { accounts, accountsLoading, selectedAccountId } = useSelectedAccount();
+  // readOnly: archived account — no adding plans (tiles lock themselves via the same context).
+  const { accounts, accountsLoading, selectedAccountId, readOnly } = useSelectedAccount();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
   const from = toDateKey(days[0]);
@@ -220,7 +221,7 @@ export default function TradePlanPage() {
                         />
                       ))
                     )}
-                    <button
+                    {!readOnly && <button
                       type="button"
                       onClick={() => addPlan(key)}
                       disabled={createPlan.isPending || !selectedAccountId}
@@ -230,7 +231,7 @@ export default function TradePlanPage() {
                       onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-text-secondary)"; e.currentTarget.style.borderColor = "var(--color-border)"; }}
                     >
                       + Add plan
-                    </button>
+                    </button>}
                   </div>
                 </section>
               );

@@ -158,6 +158,15 @@ describe("PUT /api/rules", () => {
     expect(getLastInsertValues()).toBeUndefined();
   });
 
+  it("returns 409 when the account is archived", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(getDefaultAccount).mockResolvedValue({ id: "acct-1", status: "archived" } as any);
+    const app = await buildApp();
+    const res = await app.inject({ method: "PUT", url: "/api/rules", payload: [{ text: "SL set", type: "check", options: [] }] });
+    expect(res.statusCode).toBe(409);
+    expect(getDeleteCount()).toBe(0);
+  });
+
   it("returns 400 for an invalid rule", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "PUT", url: "/api/rules", payload: [{ text: "Trend", type: "choice", options: ["Up"] }] });

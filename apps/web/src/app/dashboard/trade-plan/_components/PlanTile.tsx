@@ -13,6 +13,7 @@ import {
   useStockInstrumentsLoaded,
 } from "../../../../lib/instruments";
 import InstrumentInput from "../../InstrumentInput";
+import { useSelectedAccount } from "../../../../lib/account-context";
 
 const GREEN = "#7cc943";
 const GREEN_TEXT = "#8fd14f";
@@ -77,7 +78,9 @@ export default function PlanTile({
   const isPlanned = plan.status === "planned";
   // Skipped/logged plans are a record of the decision — read-only until Undo reopens them. The API
   // rejects edits to them as well.
-  const locked = !isPlanned;
+  // An archived account locks every tile too, with no Skip/Log/Undo — the whole account is read-only.
+  const { readOnly: accountReadOnly } = useSelectedAccount();
+  const locked = !isPlanned || accountReadOnly;
 
   function patch(next: Partial<TradePlan>, input: UpdatePlanInput) {
     updatePlan.mutate({ next: { ...planRef.current, ...next }, input });
@@ -134,7 +137,7 @@ export default function PlanTile({
 
   // Only still-open plans move between days (skipped/logged are records of that day). The API
   // enforces the same rule.
-  const canDrag = isPlanned && !!onDragStart;
+  const canDrag = isPlanned && !accountReadOnly && !!onDragStart;
   const draggable = canDrag && (!open || dragArmed);
 
   const cardStyle: React.CSSProperties = {
@@ -418,7 +421,12 @@ export default function PlanTile({
         </fieldset>
 
         {/* Actions */}
-        {isPlanned ? (
+        {accountReadOnly ? (
+          <div className="plan-cascade flex items-center justify-between text-xs" style={cascade(afterRules + 1)}>
+            <span className="font-extrabold" style={{ color: STATUS_COLOR[plan.status] }}>{STATUS_LABEL[plan.status]}</span>
+            <span className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>Archived account — read-only</span>
+          </div>
+        ) : isPlanned ? (
           <div className="plan-cascade flex flex-col gap-2.5" style={cascade(afterRules + 1)}>
             <div className="flex gap-1.5">
               <button

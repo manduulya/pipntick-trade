@@ -286,6 +286,25 @@ describe("PATCH /api/plans/:id — locked plans", () => {
   });
 });
 
+describe("archived accounts", () => {
+  it("refuses to create a plan on an archived account", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(getDefaultAccount).mockResolvedValue({ id: "acct-1", status: "archived" } as any);
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/api/plans", payload: { planDate: "2026-09-26" } });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("refuses to edit or delete a plan on an archived account", async () => {
+    queueSelect([{ plan: fakePlan(), accountStatus: "archived" }], [{ plan: fakePlan(), accountStatus: "archived" }]);
+    const app = await buildApp();
+    const edit = await app.inject({ method: "PATCH", url: "/api/plans/plan-1", payload: { symbol: "EURUSD" } });
+    const del = await app.inject({ method: "DELETE", url: "/api/plans/plan-1" });
+    expect(edit.statusCode).toBe(409);
+    expect(del.statusCode).toBe(409);
+  });
+});
+
 describe("DELETE /api/plans/:id", () => {
   it("deletes an owned plan", async () => {
     queueSelect([{ plan: fakePlan() }]);

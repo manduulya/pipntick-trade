@@ -3,7 +3,8 @@ import { and, desc, eq } from "drizzle-orm";
 import { db, tradingAccounts, trades } from "@pipntick/db";
 import { getContractSize } from "@pipntick/shared";
 import { getUserId } from "../lib/auth.js";
-import { resolveAccountId } from "../lib/resolve-account.js";
+import { resolveAccount, resolveAccountId } from "../lib/resolve-account.js";
+import { ARCHIVED_ACCOUNT_ERROR, isArchived } from "../lib/account-guard.js";
 
 type TradeDirection = "long" | "short";
 type TradeSource = "manual" | "screenshot" | "mt4";
@@ -88,8 +89,10 @@ export async function tradeRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "exitTime cannot be in the future" });
     }
 
-    const accountId = await resolveAccountId(userId, body.accountId);
-    if (!accountId) return reply.code(404).send({ error: "Account not found" });
+    const account = await resolveAccount(userId, body.accountId);
+    if (!account) return reply.code(404).send({ error: "Account not found" });
+    if (isArchived(account.status)) return reply.code(409).send({ error: ARCHIVED_ACCOUNT_ERROR });
+    const accountId = account.id;
 
     const exitPrice = optNum(body.exitPrice);
     const swap = optNum(body.swap);
@@ -136,12 +139,13 @@ export async function tradeRoutes(app: FastifyInstance) {
     const body = request.body as UpdateTradeBody;
 
     const [existing] = await db
-      .select({ trade: trades })
+      .select({ trade: trades, accountStatus: tradingAccounts.status })
       .from(trades)
       .innerJoin(tradingAccounts, eq(trades.accountId, tradingAccounts.id))
       .where(and(eq(trades.id, id), eq(tradingAccounts.userId, userId)));
 
     if (!existing) return reply.code(404).send({ error: "Trade not found" });
+    if (isArchived(existing.accountStatus)) return reply.code(409).send({ error: ARCHIVED_ACCOUNT_ERROR });
     const current = existing.trade;
 
     // Per-field merge rule for the clearable optionals: key absent in the body -> keep what's
@@ -226,12 +230,13 @@ export async function tradeRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
 
     const [existing] = await db
-      .select({ id: trades.id })
+      .select({ id: trades.id, accountStatus: tradingAccounts.status })
       .from(trades)
       .innerJoin(tradingAccounts, eq(trades.accountId, tradingAccounts.id))
       .where(and(eq(trades.id, id), eq(tradingAccounts.userId, userId)));
 
     if (!existing) return reply.code(404).send({ error: "Trade not found" });
+    if (isArchived(existing.accountStatus)) return reply.code(409).send({ error: ARCHIVED_ACCOUNT_ERROR });
 
     await db.delete(trades).where(eq(trades.id, id));
     return reply.code(204).send();

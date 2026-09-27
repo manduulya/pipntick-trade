@@ -5,6 +5,8 @@ import type { RuleType, SaveRulesInput, TradingRule } from "@pipntick/shared";
 import { useRules, useSaveRules } from "../../../lib/hooks";
 import { ApiError } from "../../../lib/api";
 import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
+import { useSelectedAccount } from "../../../lib/account-context";
+import { isReadOnlyAccount } from "@pipntick/shared";
 
 // "My Rules" — the account's one pre-trade checklist. Opened from the Trade Plan toolbar and from
 // Settings → Trading rules. Edits a local draft and saves the whole list at once; existing plan
@@ -47,6 +49,9 @@ const fieldStyle: React.CSSProperties = {
 export default function RulesDrawer({ accountId, onClose }: { accountId?: string | null; onClose: () => void }) {
   const { data: rules, isLoading } = useRules(accountId);
   const saveRules = useSaveRules(accountId);
+  // Archived accounts are read-only (the API rejects the save with 409) — show the rules, no edits.
+  const { accounts, selectedAccountId } = useSelectedAccount();
+  const readOnly = isReadOnlyAccount(accounts.find((a) => a.id === (accountId ?? selectedAccountId)));
   const [draft, setDraft] = useState<DraftRule[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
@@ -170,7 +175,7 @@ export default function RulesDrawer({ accountId, onClose }: { accountId?: string
           {isLoading || draft === null ? (
             <p className="text-xs py-6 text-center" style={{ color: "var(--color-text-muted)" }}>Loading rules…</p>
           ) : (
-            <>
+            <fieldset disabled={readOnly} className="contents">
               {rows.length === 0 && (
                 <div className="flex flex-col items-center gap-3 rounded-xl py-6 px-4 text-center" style={{ border: "1px dashed var(--color-border)" }}>
                   <p className="text-[13px]" style={{ color: "var(--color-text-secondary)" }}>
@@ -288,7 +293,7 @@ export default function RulesDrawer({ accountId, onClose }: { accountId?: string
                 + Add rule
               </button>
               <div ref={listEndRef} />
-            </>
+            </fieldset>
           )}
         </div>
 
@@ -303,15 +308,21 @@ export default function RulesDrawer({ accountId, onClose }: { accountId?: string
 
         {error && <p className="shrink-0 text-xs" style={{ color: "var(--color-danger)" }}>{error}</p>}
 
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saveRules.isPending || draft === null}
-          className="neon-btn shrink-0 rounded-[10px] py-3 text-[15px] font-extrabold"
-          style={{ opacity: saveRules.isPending || draft === null ? 0.6 : 1 }}
-        >
-          {saveRules.isPending ? "Saving…" : "Save rules"}
-        </button>
+        {readOnly ? (
+          <p className="shrink-0 text-xs text-center py-3" style={{ color: "var(--color-text-muted)" }}>
+            This account is archived, so its rules are read-only. Reactivate it to edit them.
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saveRules.isPending || draft === null}
+            className="neon-btn shrink-0 rounded-[10px] py-3 text-[15px] font-extrabold"
+            style={{ opacity: saveRules.isPending || draft === null ? 0.6 : 1 }}
+          >
+            {saveRules.isPending ? "Saving…" : "Save rules"}
+          </button>
+        )}
       </div>
     </div>
   );

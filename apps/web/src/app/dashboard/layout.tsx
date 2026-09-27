@@ -11,6 +11,7 @@ import AdSlot from "./AdSlot";
 import PageTransition from "./PageTransition";
 import ViewTransitionLink from "../ViewTransitionLink";
 import { SelectedAccountProvider } from "../../lib/account-context";
+import ArchivedAccountBanner from "./ArchivedAccountBanner";
 
 const navItems = [
   {
@@ -309,6 +310,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <QuoteBar />
           </div>
         </div>
+
+        <ArchivedAccountBanner />
 
         <div className="flex-1 min-h-0">
           <PageTransition>{children}</PageTransition>

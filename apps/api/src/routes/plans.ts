@@ -4,7 +4,8 @@ import { db, tradePlans, trades, tradingAccounts, tradingRules } from "@pipntick
 import type { RuleSnapshotItem, TradeGrade, UpdatePlanInput } from "@pipntick/shared";
 import { TRADE_GRADES } from "@pipntick/shared";
 import { getUserId } from "../lib/auth.js";
-import { resolveAccountId } from "../lib/resolve-account.js";
+import { resolveAccount, resolveAccountId } from "../lib/resolve-account.js";
+import { ARCHIVED_ACCOUNT_ERROR, isArchived } from "../lib/account-guard.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_SYMBOL = 20;
@@ -47,11 +48,11 @@ export function applyAnswers(
 
 async function findOwnedPlan(userId: string, id: string) {
   const [row] = await db
-    .select({ plan: tradePlans })
+    .select({ plan: tradePlans, accountStatus: tradingAccounts.status })
     .from(tradePlans)
     .innerJoin(tradingAccounts, eq(tradePlans.accountId, tradingAccounts.id))
     .where(and(eq(tradePlans.id, id), eq(tradingAccounts.userId, userId)));
-  return row?.plan ?? null;
+  return row ?? null;
 }
 
 export async function planRoutes(app: FastifyInstance) {
@@ -81,8 +82,10 @@ export async function planRoutes(app: FastifyInstance) {
     if (!isValidDateKey(body?.planDate)) {
       return reply.code(400).send({ error: "planDate is required as YYYY-MM-DD" });
     }
-    const accountId = await resolveAccountId(userId, body.accountId);
-    if (!accountId) return reply.code(404).send({ error: "Account not found" });
+    const account = await resolveAccount(userId, body.accountId);
+    if (!account) return reply.code(404).send({ error: "Account not found" });
+    if (isArchived(account.status)) return reply.code(409).send({ error: ARCHIVED_ACCOUNT_ERROR });
+    const accountId = account.id;
 
     // Freeze the account's current rules into the plan. Done server-side so the snapshot always
     // reflects the real rule set at creation time.
@@ -110,8 +113,10 @@ export async function planRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as UpdatePlanInput;
 
-    const current = await findOwnedPlan(userId, id);
-    if (!current) return reply.code(404).send({ error: "Plan not found" });
+    const owned = await findOwnedPlan(userId, id);
+    if (!owned) return reply.code(404).send({ error: "Plan not found" });
+    if (isArchived(owned.accountStatus)) return reply.code(409).send({ error: ARCHIVED_ACCOUNT_ERROR });
+    const current = owned.plan;
 
     // Skipped/logged plans are read-only: the only change accepted is reopening them (status back
     // to "planned", which the UI's Undo sends together with journalTradeId: null).
@@ -192,8 +197,9 @@ export async function planRoutes(app: FastifyInstance) {
     if (!userId) return reply.code(401).send({ error: "Unauthorized" });
 
     const { id } = request.params as { id: string };
-    const current = await findOwnedPlan(userId, id);
-    if (!current) return reply.code(404).send({ error: "Plan not found" });
+    const owned = await findOwnedPlan(userId, id);
+    if (!owned) return reply.code(404).send({ error: "Plan not found" });
+    if (isArchived(owned.accountStatus)) return reply.code(409).send({ error: ARCHIVED_ACCOUNT_ERROR });
 
     await db.delete(tradePlans).where(eq(tradePlans.id, id));
     return reply.code(204).send();
