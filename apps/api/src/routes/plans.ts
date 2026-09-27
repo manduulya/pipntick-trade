@@ -113,6 +113,16 @@ export async function planRoutes(app: FastifyInstance) {
     const current = await findOwnedPlan(userId, id);
     if (!current) return reply.code(404).send({ error: "Plan not found" });
 
+    // Skipped/logged plans are read-only: the only change accepted is reopening them (status back
+    // to "planned", which the UI's Undo sends together with journalTradeId: null).
+    if (current.status !== "planned" && body.status !== "planned") {
+      const edits = [body.planDate, body.symbol, body.direction, body.grade, body.answers, body.journalTradeId];
+      const statusChange = body.status !== undefined && body.status !== current.status;
+      if (edits.some((v) => v !== undefined) || statusChange) {
+        return reply.code(400).send({ error: `This plan is ${current.status} — undo it before making changes` });
+      }
+    }
+
     let symbol = current.symbol;
     if (body.symbol !== undefined) {
       if (typeof body.symbol !== "string") return reply.code(400).send({ error: "symbol must be a string" });
@@ -141,6 +151,14 @@ export async function planRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Grade the setup before logging it" });
     }
 
+    let planDate = current.planDate;
+    if (body.planDate !== undefined && body.planDate !== current.planDate) {
+      if (!isValidDateKey(body.planDate)) return reply.code(400).send({ error: "planDate must be YYYY-MM-DD" });
+      // A skipped or logged plan is a record of what happened on that day — only open plans move.
+      if (status !== "planned") return reply.code(400).send({ error: "Only planned trades can be moved to another day" });
+      planDate = body.planDate;
+    }
+
     let journalTradeId = current.journalTradeId;
     if (body.journalTradeId !== undefined) {
       if (body.journalTradeId !== null) {
@@ -163,7 +181,7 @@ export async function planRoutes(app: FastifyInstance) {
 
     const [updated] = await db
       .update(tradePlans)
-      .set({ symbol, direction, grade, status, journalTradeId, rulesSnapshot, updatedAt: new Date() })
+      .set({ planDate, symbol, direction, grade, status, journalTradeId, rulesSnapshot, updatedAt: new Date() })
       .where(eq(tradePlans.id, id))
       .returning();
     return updated;

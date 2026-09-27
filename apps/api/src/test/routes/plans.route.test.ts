@@ -228,6 +228,64 @@ describe("PATCH /api/plans/:id", () => {
   });
 });
 
+describe("PATCH /api/plans/:id — moving days", () => {
+  it("moves a planned plan to another day", async () => {
+    queueSelect([{ plan: fakePlan() }]);
+    setUpdateResult([fakePlan({ planDate: "2026-09-24" })]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "PATCH", url: "/api/plans/plan-1", payload: { planDate: "2026-09-24" } });
+    expect(res.statusCode).toBe(200);
+    expect(getLastUpdateSet()).toMatchObject({ planDate: "2026-09-24" });
+  });
+
+  it("refuses to move a logged or skipped plan", async () => {
+    queueSelect([{ plan: fakePlan({ status: "skipped" }) }]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "PATCH", url: "/api/plans/plan-1", payload: { planDate: "2026-09-24" } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects a malformed planDate", async () => {
+    queueSelect([{ plan: fakePlan() }]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "PATCH", url: "/api/plans/plan-1", payload: { planDate: "Thursday" } });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("PATCH /api/plans/:id — locked plans", () => {
+  it("rejects edits to a logged plan", async () => {
+    queueSelect([{ plan: fakePlan({ status: "logged", grade: "A", journalTradeId: "trade-1" }) }]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/plans/plan-1",
+      payload: { answers: [{ done: false, value: "Up" }, { done: true, value: null }] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects switching a skipped plan straight to logged", async () => {
+    queueSelect([{ plan: fakePlan({ status: "skipped", grade: "B" }) }]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "PATCH", url: "/api/plans/plan-1", payload: { status: "logged" } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("allows undo: reopening a logged plan and unlinking its trade", async () => {
+    queueSelect([{ plan: fakePlan({ status: "logged", grade: "A", journalTradeId: "trade-1" }) }]);
+    setUpdateResult([fakePlan({ grade: "A" })]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/plans/plan-1",
+      payload: { status: "planned", journalTradeId: null },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(getLastUpdateSet()).toMatchObject({ status: "planned", journalTradeId: null });
+  });
+});
+
 describe("DELETE /api/plans/:id", () => {
   it("deletes an owned plan", async () => {
     queueSelect([{ plan: fakePlan() }]);

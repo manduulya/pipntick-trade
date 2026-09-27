@@ -386,8 +386,23 @@ html {
 }
 
 .plan-pill-in:hover {
-  border-color: var(--color-green-primary) !important;
-  color: var(--color-text-primary) !important;
+  border-color: var(--tone-border, var(--color-green-primary)) !important;
+  color: var(--tone-text, var(--color-text-primary)) !important;
+}
+
+/* Locked (skipped/logged) plan tiles: controls inside a disabled .plan-lock fieldset stay readable
+   (answers and grade are still the record) but clearly aren't interactive. */
+.plan-lock:disabled :is(button, input, label) {
+  cursor: not-allowed !important;
+}
+
+.plan-lock:disabled :is(button, input[type="checkbox"]):not([aria-pressed="true"]):not(:checked) {
+  opacity: 0.55;
+}
+
+.plan-lock:disabled .plan-pill-in:hover {
+  border-color: var(--color-border) !important;
+  color: var(--color-text-secondary) !important;
 }
 
 /* Trade Plan scrollers (day columns, week row, rules drawer): a slim, track-less, rounded thumb

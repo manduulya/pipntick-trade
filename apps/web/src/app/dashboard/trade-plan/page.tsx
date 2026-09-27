@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { TradePlan } from "@pipntick/shared";
-import { useCreatePlan, usePlans, useRules } from "../../../lib/hooks";
+import { useCreatePlan, usePlans, useRules, useUpdatePlan } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
 import { ApiError } from "../../../lib/api";
 import { addWeeks, formatWeekRange, startOfWeek, toDateKey, weekDays, weekSummary } from "../../../lib/trade-plan-utils";
@@ -27,12 +27,22 @@ export default function TradePlanPage() {
   const { data: plans, isLoading, isError, error } = usePlans(from, to);
   const { data: rules } = useRules();
   const createPlan = useCreatePlan();
+  const updatePlan = useUpdatePlan();
 
   // Expanded/collapsed is view state only — never persisted, so every tile starts collapsed on load.
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
   const [rulesOpen, setRulesOpen] = useState(false);
   const [loggingPlan, setLoggingPlan] = useState<TradePlan | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Drag-to-reschedule: the tile being dragged and the day column currently under it.
+  const [draggingPlan, setDraggingPlan] = useState<TradePlan | null>(null);
+  const [dropKey, setDropKey] = useState<string | null>(null);
+
+  function movePlan(plan: TradePlan, dayKey: string) {
+    if (plan.planDate === dayKey || plan.status !== "planned") return;
+    // Optimistic: the tile jumps to the new column immediately (plansByDay re-buckets by planDate).
+    updatePlan.mutate({ next: { ...plan, planDate: dayKey }, input: { planDate: dayKey } });
+  }
 
   const plansByDay = useMemo(() => {
     const map = new Map<string, TradePlan[]>();
@@ -123,6 +133,11 @@ export default function TradePlanPage() {
         </button>
       </div>
 
+      {updatePlan.isError && (
+        <p className="text-xs shrink-0" style={{ color: "var(--color-danger)" }}>
+          {updatePlan.error instanceof ApiError ? updatePlan.error.message : "Couldn't move the plan."}
+        </p>
+      )}
       {createPlan.isError && (
         <p className="text-xs shrink-0" style={{ color: "var(--color-danger)" }}>
           {createPlan.error instanceof ApiError ? createPlan.error.message : "Couldn't add the plan."}
@@ -144,15 +159,37 @@ export default function TradePlanPage() {
               const key = toDateKey(day);
               const isToday = key === todayKey;
               const dayPlans = plansByDay.get(key) ?? [];
+              const isDropTarget = !!draggingPlan && dropKey === key && draggingPlan.planDate !== key;
               return (
                 <section
                   key={key}
                   aria-label={day.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
                   className="flex flex-col min-w-0 min-h-0 rounded-xl"
                   style={{
-                    backgroundColor: "var(--color-bg-surface)",
-                    border: `1px solid ${isToday ? CYAN : "var(--color-border)"}`,
-                    boxShadow: isToday ? "0 0 0 1px rgba(34,211,238,0.15)" : undefined,
+                    backgroundColor: isDropTarget ? "rgba(124,201,67,0.06)" : "var(--color-bg-surface)",
+                    border: isDropTarget
+                      ? `1px dashed ${GREEN}`
+                      : `1px solid ${isToday ? CYAN : "var(--color-border)"}`,
+                    boxShadow: isDropTarget
+                      ? "0 0 0 1px rgba(124,201,67,0.25)"
+                      : isToday ? "0 0 0 1px rgba(34,211,238,0.15)" : undefined,
+                    transition: "background-color 0.15s ease, border-color 0.15s ease",
+                  }}
+                  onDragOver={(e) => {
+                    if (!draggingPlan) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (dropKey !== key) setDropKey(key);
+                  }}
+                  onDragLeave={(e) => {
+                    // Ignore leaves into this column's own children.
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null) && dropKey === key) setDropKey(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (draggingPlan) movePlan(draggingPlan, key);
+                    setDraggingPlan(null);
+                    setDropKey(null);
                   }}
                 >
                   <div className="flex items-baseline justify-between px-3 pt-3 pb-2.5" style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
@@ -177,6 +214,9 @@ export default function TradePlanPage() {
                           open={openIds.has(plan.id)}
                           onToggle={() => toggle(plan.id)}
                           onLog={setLoggingPlan}
+                          dragging={draggingPlan?.id === plan.id}
+                          onDragStart={setDraggingPlan}
+                          onDragEnd={() => { setDraggingPlan(null); setDropKey(null); }}
                         />
                       ))
                     )}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RuleSnapshotItem } from "@pipntick/shared";
 import {
   addWeeks,
+  choiceTone,
   formatWeekRange,
   fromDateKey,
   planProgress,
@@ -73,6 +74,20 @@ describe("toJournalSymbol", () => {
     expect(toJournalSymbol("nas100", known)).toBe("NAS100");
     expect(toJournalSymbol("ABCDEF", known)).toBe("ABCDEF");
     expect(toJournalSymbol("EUR/USD", known)).toBe("EUR/USD");
+  });
+});
+
+describe("choiceTone", () => {
+  it("colors bullish answers green, bearish red and range-bound silver", () => {
+    expect(choiceTone("Up").border).toBe("#7cc943");
+    expect(choiceTone(" bearish ").border).toBe("#f05252");
+    expect(choiceTone("Down").border).toBe("#f05252");
+    expect(choiceTone("Sideways").border).toBe("#a9b3c1");
+  });
+
+  it("falls back to green for other answers", () => {
+    expect(choiceTone("London").border).toBe("#7cc943");
+    expect(choiceTone("Set & Forget").border).toBe("#7cc943");
   });
 });
 
