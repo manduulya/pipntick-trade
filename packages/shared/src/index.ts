@@ -233,6 +233,8 @@ export interface CreatePlanInput {
 }
 
 export interface UpdatePlanInput {
+  /** Move the plan to another day ("YYYY-MM-DD"). Only allowed while the plan is still `planned`. */
+  planDate?: string;
   symbol?: string;
   direction?: TradeDirection;
   grade?: TradeGrade | null;

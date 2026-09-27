@@ -14,6 +14,24 @@ export const GRADE_COLORS: Record<TradeGrade, { bg: string; fg: string }> = {
   "A++": { bg: "#2fe0a8", fg: "#0a1206" },
 };
 
+export type ChoiceTone = { border: string; text: string; bg: string };
+
+const TONE_UP: ChoiceTone = { border: "#7cc943", text: "#8fd14f", bg: "rgba(124,201,67,0.15)" };
+const TONE_DOWN: ChoiceTone = { border: "#f05252", text: "#f47373", bg: "rgba(240,82,82,0.14)" };
+const TONE_FLAT: ChoiceTone = { border: "#a9b3c1", text: "#bcc5d1", bg: "rgba(169,179,193,0.14)" };
+
+/**
+ * Color for a multiple-choice answer, read from its wording: bullish words green, bearish red,
+ * range-bound silver. Anything else (e.g. "London", "Set & Forget") keeps the default green.
+ */
+export function choiceTone(option: string): ChoiceTone {
+  const o = option.trim().toLowerCase();
+  if (/^(up|bull(ish)?|long|higher|uptrend|buy)$/.test(o)) return TONE_UP;
+  if (/^(down|bear(ish)?|short|lower|downtrend|sell)$/.test(o)) return TONE_DOWN;
+  if (/^(sideways|side|range|ranging|neutral|flat|consolidation|consolidating|choppy)$/.test(o)) return TONE_FLAT;
+  return TONE_UP;
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** Local calendar day as "YYYY-MM-DD". */

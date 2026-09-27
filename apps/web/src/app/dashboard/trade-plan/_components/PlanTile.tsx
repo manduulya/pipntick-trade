@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { RuleSnapshotItem, TradeGrade, TradePlan, UpdatePlanInput } from "@pipntick/shared";
 import { TRADE_GRADES, isRuleMet } from "@pipntick/shared";
-import { useDeletePlan, useUpdatePlan } from "../../../../lib/hooks";
+import { useDeletePlan, useDeleteTrade, useUpdatePlan } from "../../../../lib/hooks";
 import { ApiError } from "../../../../lib/api";
-import { GRADE_COLORS, planProgress, toAnswers } from "../../../../lib/trade-plan-utils";
+import { GRADE_COLORS, choiceTone, planProgress, toAnswers } from "../../../../lib/trade-plan-utils";
 import {
   findInstrument,
   loadStockInstruments,
@@ -28,18 +28,31 @@ export default function PlanTile({
   open,
   onToggle,
   onLog,
+  dragging = false,
+  onDragStart,
+  onDragEnd,
 }: {
   plan: TradePlan;
   open: boolean;
   onToggle: () => void;
   /** Opens the Add Trade flow for this plan; the page links the created trade back. */
   onLog: (plan: TradePlan) => void;
+  /** This tile is the one currently being dragged to another day. */
+  dragging?: boolean;
+  onDragStart?: (plan: TradePlan) => void;
+  onDragEnd?: () => void;
 }) {
   const updatePlan = useUpdatePlan();
   const deletePlan = useDeletePlan();
+  const deleteJournalTrade = useDeleteTrade();
+  // Undo on a logged plan first asks whether the Journal trade should go too.
+  const [undoAsk, setUndoAsk] = useState(false);
   const [symbol, setSymbol] = useState(plan.symbol);
   const [symbolError, setSymbolError] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Expanded tiles only become draggable when the press starts on empty chrome, never on a
+  // field/button/label — otherwise selecting text in the symbol input would start a drag.
+  const [dragArmed, setDragArmed] = useState(false);
   const symbolFocused = useRef(false);
   const commitSeq = useRef(0);
   // Latest plan for patches fired after an await (commitSymbol) — its closure would otherwise hold
@@ -62,6 +75,9 @@ export default function PlanTile({
   const dirColor = plan.direction === "long" ? GREEN_TEXT : RED;
   const dirArrow = plan.direction === "long" ? "▲" : "▼";
   const isPlanned = plan.status === "planned";
+  // Skipped/logged plans are a record of the decision — read-only until Undo reopens them. The API
+  // rejects edits to them as well.
+  const locked = !isPlanned;
 
   function patch(next: Partial<TradePlan>, input: UpdatePlanInput) {
     updatePlan.mutate({ next: { ...planRef.current, ...next }, input });
@@ -104,15 +120,28 @@ export default function PlanTile({
     onToggle();
   }
 
-  function undo() {
-    patch({ status: "planned", journalTradeId: null }, { status: "planned", journalTradeId: null });
+  /** Reopens a skipped/logged plan for editing. `deleteTrade` also removes the linked Journal
+   * trade (asked explicitly — undoing a log doesn't by itself mean the trade didn't happen). */
+  function undo(deleteTrade = false) {
+    const tradeId = plan.journalTradeId;
+    const reopen = () => {
+      setUndoAsk(false);
+      patch({ status: "planned", journalTradeId: null }, { status: "planned", journalTradeId: null });
+    };
+    if (deleteTrade && tradeId) deleteJournalTrade.mutate(tradeId, { onSuccess: reopen });
+    else reopen();
   }
+
+  // Only still-open plans move between days (skipped/logged are records of that day). The API
+  // enforces the same rule.
+  const canDrag = isPlanned && !!onDragStart;
+  const draggable = canDrag && (!open || dragArmed);
 
   const cardStyle: React.CSSProperties = {
     borderRadius: 10,
     backgroundColor: "var(--color-bg-card)",
     border: `1px solid ${open ? "var(--color-border-hover)" : "var(--color-border-subtle)"}`,
-    opacity: plan.status === "skipped" && !open ? 0.6 : 1,
+    opacity: dragging ? 0.4 : plan.status === "skipped" && !open ? 0.6 : 1,
     boxShadow: `inset 3px 0 0 ${gradeColor ?? "var(--color-border)"}`,
     transition: "opacity 0.2s ease, border-color 0.2s ease",
   };
@@ -130,7 +159,27 @@ export default function PlanTile({
   // expanding/collapsing slides smoothly instead of snapping. The hidden face is `inert` so it
   // can't be tabbed into.
   return (
-    <article className="shrink-0" data-open={open} style={cardStyle}>
+    <article
+      className="shrink-0"
+      data-open={open}
+      style={{ ...cardStyle, cursor: draggable && !open ? "grab" : undefined }}
+      draggable={draggable}
+      onPointerDown={(e) => {
+        if (!canDrag || !open) return;
+        setDragArmed(!(e.target as HTMLElement).closest("input, button, label, textarea, [role='group'] button"));
+      }}
+      onPointerUp={() => setDragArmed(false)}
+      onDragStart={(e) => {
+        if (!draggable) return;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", plan.id); // required for Firefox to start the drag
+        onDragStart?.(plan);
+      }}
+      onDragEnd={() => {
+        setDragArmed(false);
+        onDragEnd?.();
+      }}
+    >
       <div className="plan-fold" style={{ gridTemplateRows: open ? "0fr" : "1fr", opacity: open ? 0 : 1 }} inert={open}>
         <div className="min-h-0 overflow-hidden">
         <button
@@ -169,6 +218,9 @@ export default function PlanTile({
       <div className="flex flex-col gap-2.5 px-3 pt-2.5 pb-3">
         {/* Symbol · direction · delete · minimize */}
         <div className="plan-cascade flex items-center gap-1.5" style={cascade(0)}>
+          {/* display:contents fieldset — disabling it natively disables every control inside
+              without changing the row's flex layout. Minimize stays outside so it always works. */}
+          <fieldset disabled={locked} className="plan-lock contents">
           <InstrumentInput
             portal
             value={symbol}
@@ -228,9 +280,10 @@ export default function PlanTile({
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
             </button>
           )}
+          </fieldset>
           <button
             type="button"
-            onClick={() => { commitSymbol(symbol); onToggle(); }}
+            onClick={() => { if (!locked) commitSymbol(symbol); onToggle(); }}
             aria-label="Minimize"
             aria-expanded="true"
             className="focus-ring press-scale shrink-0 w-7 h-[30px] grid place-content-center rounded-[7px]"
@@ -254,7 +307,8 @@ export default function PlanTile({
           </div>
         </div>
 
-        {/* Rules */}
+        {/* Rules + grade: read-only once the plan is skipped/logged (see `locked`). */}
+        <fieldset disabled={locked} className="plan-lock contents">
         <div className="flex flex-col gap-2">
           {total === 0 && (
             <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
@@ -301,7 +355,10 @@ export default function PlanTile({
                       aria-pressed="true"
                       title="Click to change"
                       className="plan-pill-pop focus-ring shrink-0 rounded-full text-xs font-bold"
-                      style={{ padding: "3px 10px", border: `1px solid ${GREEN}`, backgroundColor: "rgba(124,201,67,0.15)", color: GREEN_TEXT }}
+                      style={(() => {
+                        const tone = choiceTone(r.value);
+                        return { padding: "3px 10px", border: `1px solid ${tone.border}`, backgroundColor: tone.bg, color: tone.text };
+                      })()}
                     >
                       {r.value}
                     </button>
@@ -321,6 +378,9 @@ export default function PlanTile({
                           border: "1px solid var(--color-border)",
                           color: "var(--color-text-secondary)",
                           animationDelay: `${k * 45}ms`,
+                          // Hover previews the answer's color (see .plan-pill-in:hover).
+                          ["--tone-border" as string]: choiceTone(o).border,
+                          ["--tone-text" as string]: choiceTone(o).text,
                         }}
                       >
                         {o}
@@ -355,6 +415,7 @@ export default function PlanTile({
             })}
           </div>
         </div>
+        </fieldset>
 
         {/* Actions */}
         {isPlanned ? (
@@ -403,14 +464,74 @@ export default function PlanTile({
             )}
           </div>
         ) : (
-          <div className="plan-cascade flex items-center justify-between text-xs" style={cascade(afterRules + 1)}>
-            <span className="font-extrabold" style={{ color: STATUS_COLOR[plan.status] }}>{STATUS_LABEL[plan.status]}</span>
-            <button type="button" onClick={undo} className="focus-ring font-bold underline" style={{ color: "var(--color-text-secondary)" }}>
-              Undo
-            </button>
+          <div className="plan-cascade flex flex-col gap-2 text-xs" style={cascade(afterRules + 1)}>
+            <div className="flex items-center justify-between">
+              <span className="font-extrabold" style={{ color: STATUS_COLOR[plan.status] }}>{STATUS_LABEL[plan.status]}</span>
+              {!undoAsk && (
+                <button
+                  type="button"
+                  // A logged plan with a linked trade asks what to do with that trade; a skipped
+                  // plan (or one whose trade was already deleted in the Journal) just reopens.
+                  onClick={() => (plan.status === "logged" && plan.journalTradeId ? setUndoAsk(true) : undo())}
+                  className="focus-ring font-bold underline"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  Undo
+                </button>
+              )}
+            </div>
+            {!undoAsk && (
+              <span className="text-[11px] flex items-center gap-1" style={{ color: "var(--color-text-muted)" }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
+                Locked — undo to make changes
+              </span>
+            )}
+            {undoAsk && (
+              <div
+                className="plan-pill-in flex flex-col gap-2 rounded-lg p-2.5"
+                style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}
+              >
+                <span className="text-[12px] leading-snug" style={{ color: "var(--color-text-primary)" }}>
+                  Reopen this plan. What about the trade in your Journal?
+                </span>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => undo(false)}
+                    disabled={deleteJournalTrade.isPending}
+                    className="focus-ring press-scale flex-1 py-1.5 rounded-md font-bold"
+                    style={{ border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
+                  >
+                    Keep trade
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => undo(true)}
+                    disabled={deleteJournalTrade.isPending}
+                    className="focus-ring press-scale flex-1 py-1.5 rounded-md font-bold"
+                    style={{ border: `1px solid ${RED}`, color: RED, opacity: deleteJournalTrade.isPending ? 0.6 : 1 }}
+                  >
+                    {deleteJournalTrade.isPending ? "Deleting…" : "Delete trade"}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUndoAsk(false)}
+                  className="focus-ring self-center text-[11px] underline"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         )}
 
+        {deleteJournalTrade.isError && (
+          <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>
+            Couldn&rsquo;t delete the Journal trade, so the plan was left as is.
+          </p>
+        )}
         {errorMessage && <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>{errorMessage}</p>}
       </div>
       </div>
