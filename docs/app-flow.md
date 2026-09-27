@@ -55,6 +55,12 @@ flowchart TD
     Dashboard --> Calendar[🔒 Trading Calendar Page]
     Calendar --> CalendarLegend[🔒 Legend: Green = Profit, Red = Loss]
 
+    Dashboard --> TradePlan[🔒 Trade Plan: Weekly Pre-Trade Checklist]
+    TradePlan --> MyRules[🔒 Edit My Rules]
+    TradePlan --> GradePlan[🔒 Tick Rules + Grade Setup]
+    GradePlan --> SkipPlan[🔒 Skip Trade]
+    GradePlan --> AddTrade
+
     Dashboard --> Performance[🔒 Performance Analytics Page]
     Performance --> TimeRange[🔒 Select Time Range]
     TimeRange --> WeeklyView[🔒 Weekly View]
@@ -85,6 +91,7 @@ flowchart TD
 | `/reset-password` | Public | Reset password |
 | `/news` | Public | Market news & economic calendar |
 | `/dashboard` | Auth | Main dashboard |
+| `/dashboard/trade-plan` | Auth | Trade Plan — weekly pre-trade checklist board + My Rules |
 | `/accounts/new` | Auth | Add / create trading account |
 | `/trades/new` | Auth | Add trade (manual, CSV, screenshot, MT4) |
 | `/calendar` | Auth | Trading calendar |

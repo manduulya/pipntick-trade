@@ -5,6 +5,8 @@ import { useTheme } from "../../../lib/theme-context";
 import { useTimeFormat } from "../../../lib/time-format-context";
 import DeleteAccountModal from "./DeleteAccountModal";
 import DateTimeFormatSelect from "../_components/DateTimeFormatSelect";
+import RulesDrawer from "../_components/RulesDrawer";
+import { useSelectedAccount } from "../../../lib/account-context";
 
 // Live example shown next to each preset in the dropdown — the actual current date/time, just to
 // demonstrate the pattern; which instant it is doesn't matter, only the digit arrangement does.
@@ -16,6 +18,8 @@ function nowAsPickerValue(): string {
 
 export default function SettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showRules, setShowRules] = useState(false);
+  const { selectedAccount } = useSelectedAccount();
   const { theme, setTheme } = useTheme();
   const { timeFormat, setTimeFormat } = useTimeFormat();
   const previewValue = nowAsPickerValue();
@@ -64,6 +68,27 @@ export default function SettingsPage() {
       </div>
 
       <div
+        className="max-w-lg rounded-xl p-5 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
+        style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}
+      >
+        <div className="flex flex-col gap-1">
+          <h2 className="text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>Trading rules:</h2>
+          <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+            Your pre-trade checklist for {selectedAccount?.name ?? "this account"}, used by Trade Plan.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowRules(true)}
+          disabled={!selectedAccount}
+          className="focus-ring press-scale shrink-0 rounded-lg text-xs font-semibold px-4 py-2"
+          style={{ border: "1px solid var(--color-green-primary)", color: "var(--color-green-primary)", opacity: selectedAccount ? 1 : 0.5 }}
+        >
+          Edit rules
+        </button>
+      </div>
+
+      <div
         className="max-w-lg rounded-xl p-5"
         style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-danger)" }}
       >
@@ -82,6 +107,7 @@ export default function SettingsPage() {
       </div>
 
       {showDeleteModal && <DeleteAccountModal onClose={() => setShowDeleteModal(false)} />}
+      {showRules && <RulesDrawer onClose={() => setShowRules(false)} />}
     </div>
   );
 }

@@ -1,5 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { getContractSize } from "../index";
+import { getContractSize, getFuturesContract, isRuleMet } from "../index";
+
+describe("futures", () => {
+  it("uses the contract's dollar point value as its size", () => {
+    expect(getContractSize("MES")).toBe(5);
+    expect(getContractSize("mgc")).toBe(10);
+    expect(getContractSize("ES")).toBe(50);
+    expect(getContractSize("CL")).toBe(1000);
+  });
+
+  it("recognizes known roots only", () => {
+    expect(getFuturesContract(" mnq ")).toEqual({ name: "Micro E-mini Nasdaq-100", pointValue: 2 });
+    expect(getFuturesContract("AAPL")).toBeNull();
+    expect(getFuturesContract("MESZ6")).toBeNull();
+  });
+});
+
+describe("isRuleMet", () => {
+  it("counts a check when ticked and a choice when answered", () => {
+    expect(isRuleMet({ type: "check", done: true, value: null })).toBe(true);
+    expect(isRuleMet({ type: "check", done: false, value: null })).toBe(false);
+    expect(isRuleMet({ type: "choice", done: false, value: "Up" })).toBe(true);
+    expect(isRuleMet({ type: "choice", done: true, value: null })).toBe(false);
+  });
+});
 
 describe("getContractSize", () => {
   it("treats a slash-separated 3/3 letter pair as forex (1 lot = 100,000 units)", () => {

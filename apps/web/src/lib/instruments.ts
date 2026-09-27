@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { FUTURES_CONTRACTS } from "@pipntick/shared";
+
 export type Instrument = {
   symbol: string;
   name: string;
@@ -44,6 +47,8 @@ export const CURATED_INSTRUMENTS: Instrument[] = [
   { symbol: "ETH/USD", name: "Ethereum / US Dollar" },
   { symbol: "XRP/USD", name: "XRP / US Dollar" },
   { symbol: "SOL/USD", name: "Solana / US Dollar" },
+  // Futures (CME roots) — names come from the shared spec so the list and P&L sizing can't drift.
+  ...Object.entries(FUTURES_CONTRACTS).map(([symbol, f]) => ({ symbol, name: `${f.name} · Futures` })),
 ];
 
 const curatedIndexed: IndexedInstrument[] = CURATED_INSTRUMENTS.map(index);
@@ -70,21 +75,57 @@ export function loadStockInstruments(): Promise<Instrument[]> {
   return stockPromise;
 }
 
+export function stockInstrumentsLoaded(): boolean {
+  return stockIndexed !== null;
+}
+
+/**
+ * The listed instrument a typed symbol refers to (case-insensitive exact match), or null if it
+ * isn't in the list. A bare 6-letter pair like "EURUSD" also resolves to its slashed "EUR/USD"
+ * entry. Stocks only resolve once loadStockInstruments() has finished.
+ */
+export function findInstrument(symbol: string): Instrument | null {
+  const s = symbol.trim().toLowerCase();
+  if (!s) return null;
+  const candidates = /^[a-z]{6}$/.test(s) ? [s, `${s.slice(0, 3)}/${s.slice(3)}`] : [s];
+  const pool = stockIndexed ? [...curatedIndexed, ...stockIndexed] : curatedIndexed;
+  for (const c of candidates) {
+    const hit = pool.find((inst) => inst._symbolL === c);
+    if (hit) return { symbol: hit.symbol, name: hit.name };
+  }
+  return null;
+}
+
+/** Re-renders the caller once the (lazily fetched) stock list is available, so findInstrument
+ * can resolve stock symbols. */
+export function useStockInstrumentsLoaded(): boolean {
+  const [loaded, setLoaded] = useState(stockInstrumentsLoaded);
+  useEffect(() => {
+    if (!loaded) loadStockInstruments().then(() => setLoaded(true));
+  }, [loaded]);
+  return loaded;
+}
+
 export function matchInstruments(query: string, limit = 5): Instrument[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
 
   const pool = stockIndexed ? [...curatedIndexed, ...stockIndexed] : curatedIndexed;
+  // Exact symbol hits first (typing "MES" must surface MES before MESH), then prefix, then
+  // substring/name matches. Curated entries precede stocks within each tier.
+  const exact: Instrument[] = [];
   const starts: Instrument[] = [];
   const contains: Instrument[] = [];
 
   for (const inst of pool) {
-    if (inst._symbolL.startsWith(q)) {
+    if (inst._symbolL === q) {
+      exact.push(inst);
+    } else if (inst._symbolL.startsWith(q)) {
       starts.push(inst);
     } else if (inst._symbolL.includes(q) || inst._nameL.includes(q)) {
       contains.push(inst);
     }
   }
 
-  return [...starts, ...contains].slice(0, limit);
+  return [...exact, ...starts, ...contains].slice(0, limit);
 }

@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db, tradingAccounts, trades } from "@pipntick/db";
 import { getContractSize } from "@pipntick/shared";
 import { getUserId } from "../lib/auth.js";
-import { getDefaultAccount } from "../lib/ensure-account.js";
+import { resolveAccountId } from "../lib/resolve-account.js";
 
 type TradeDirection = "long" | "short";
 type TradeSource = "manual" | "screenshot" | "mt4";
@@ -35,18 +35,6 @@ type UpdateTradeBody = Partial<CreateTradeBody>;
 // nothing / an explicit null. Collapses "absent" and "cleared" for the POST path and for pnl math.
 function optNum(v: number | null | undefined): number | undefined {
   return v == null ? undefined : v;
-}
-
-async function resolveAccountId(userId: string, requestedAccountId?: string) {
-  if (requestedAccountId) {
-    const [account] = await db
-      .select()
-      .from(tradingAccounts)
-      .where(and(eq(tradingAccounts.id, requestedAccountId), eq(tradingAccounts.userId, userId)));
-    return account?.id ?? null;
-  }
-  const account = await getDefaultAccount(userId);
-  return account?.id ?? null;
 }
 
 // Grace window for the "not in the future" checks below. The web client stores trade times as
