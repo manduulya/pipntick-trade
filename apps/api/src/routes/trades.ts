@@ -28,6 +28,8 @@ type CreateTradeBody = {
   /** Signed broker adjustments (negative = a cost). Folded into the auto-calculated pnl. */
   swap?: number | null;
   commission?: number | null;
+  /** Trader's own "this was a mistake" flag. On PATCH: absent = keep. */
+  isMistake?: boolean;
 };
 
 type UpdateTradeBody = Partial<CreateTradeBody>;
@@ -81,6 +83,9 @@ export async function tradeRoutes(app: FastifyInstance) {
     if (body.exitTime && new Date(body.exitTime) < new Date(body.entryTime)) {
       return reply.code(400).send({ error: "exitTime cannot be earlier than entryTime" });
     }
+    if (body.isMistake !== undefined && typeof body.isMistake !== "boolean") {
+      return reply.code(400).send({ error: "isMistake must be a boolean" });
+    }
     const futureCutoff = Date.now() + FUTURE_TOLERANCE_MS;
     if (new Date(body.entryTime).getTime() > futureCutoff) {
       return reply.code(400).send({ error: "entryTime cannot be in the future" });
@@ -123,6 +128,7 @@ export async function tradeRoutes(app: FastifyInstance) {
         exitTime: body.exitTime ? new Date(body.exitTime) : null,
         session: body.session,
         notes: body.notes ?? null,
+        isMistake: body.isMistake ?? false,
         source: body.source ?? "manual",
         screenshotUrl: body.screenshotUrl,
       })
@@ -164,6 +170,10 @@ export async function tradeRoutes(app: FastifyInstance) {
     const commission =
       body.commission === undefined ? currentNum(current.commission) : optNum(body.commission);
     const notes = body.notes === undefined ? current.notes : body.notes;
+    if (body.isMistake !== undefined && typeof body.isMistake !== "boolean") {
+      return reply.code(400).send({ error: "isMistake must be a boolean" });
+    }
+    const isMistake = body.isMistake === undefined ? current.isMistake : body.isMistake;
     const entryTime = body.entryTime ? new Date(body.entryTime) : current.entryTime;
     const exitTime =
       body.exitTime === undefined ? current.exitTime : body.exitTime ? new Date(body.exitTime) : null;
@@ -214,6 +224,7 @@ export async function tradeRoutes(app: FastifyInstance) {
         exitTime,
         session: body.session ?? current.session,
         notes,
+        isMistake,
         screenshotUrl: body.screenshotUrl ?? current.screenshotUrl,
         updatedAt: new Date(),
       })

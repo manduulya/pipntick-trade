@@ -1,0 +1,1 @@
+ALTER TABLE "trades" ADD COLUMN "is_mistake" boolean DEFAULT false NOT NULL;

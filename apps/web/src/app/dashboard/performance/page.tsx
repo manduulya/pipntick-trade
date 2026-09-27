@@ -204,7 +204,8 @@ export default function PerformancePage() {
       </div>
 
       {/* Period stats — fixed portfolio value first, then period-driven */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
+      {/* 10 cards: 2 rows of 5 at lg (row 1 = outcome + edge, row 2 = per-trade + discipline). */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
         {/* Portfolio value — always fixed */}
         <div className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}>
           <p className="text-xs font-medium mb-1" style={{ color: "var(--color-text-muted)" }}>Portfolio Value</p>
@@ -216,8 +217,10 @@ export default function PerformancePage() {
           { label: "P&L",          value: ps.pnl,          sub: `${period} total`,       color: ps.pnlPos ? "var(--color-green-primary)" : "var(--color-danger)" },
           { label: "Win Rate",     value: ps.winRate,       sub: ps.winRateSub,            color: "var(--color-green-primary)" },
           { label: "Profit Factor",value: ps.profitFactor,  sub: "gross profit / loss",   color: "var(--color-text-primary)" },
+          { label: "Avg Reward:Risk", value: ps.rr,         sub: ps.rrSub,                 color: "var(--color-text-primary)" },
           { label: "Avg Win",      value: ps.avgWin,        sub: "per winning trade",      color: "var(--color-green-primary)" },
           { label: "Avg Loss",     value: ps.avgLoss,       sub: "per losing trade",       color: "var(--color-danger)" },
+          { label: "Cost of Mistakes", value: ps.mistakeCost, sub: ps.mistakeSub,          color: ps.mistakeCostZero ? "var(--color-text-secondary)" : "var(--color-danger)" },
           { label: "Total Trades",       value: ps.trades,          sub: ps.tradesSub,          color: "var(--color-text-primary)" },
           { label: "Avg Trade Duration", value: ps.avgDuration,     sub: ps.avgDurationSub,     color: "var(--color-text-primary)" },
         ].map((s) => (

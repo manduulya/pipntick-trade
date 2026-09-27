@@ -37,6 +37,8 @@ export interface Trade {
   lotSize: string;
   pnl: string | null;
   pnlManual: boolean;
+  /** Flagged as a mistake by the trader; `notes` then describes the mistake. */
+  isMistake: boolean;
   /** Signed broker adjustments already folded into pnl (negative = a cost). */
   swap: string | null;
   commission: string | null;
@@ -173,6 +175,8 @@ export interface CreateTradeInput {
   /** Signed broker adjustments (negative = a cost). Folded into the auto-calculated pnl. */
   swap?: number | null;
   commission?: number | null;
+  /** Mark the trade as a mistake (PATCH: omit to keep). */
+  isMistake?: boolean;
 }
 
 /** Trade fields extracted from a broker screenshot via OCR. Any field can be null if not legible/present. */
