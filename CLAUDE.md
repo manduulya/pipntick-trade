@@ -165,7 +165,7 @@ Requests with no `accountId` are resolved against the caller's default `trading_
 Shared route helper: `apps/api/src/lib/resolve-account.ts`'s `resolveAccountId` (requested account if owned, else default) — used by trades, rules and plans.
 
 `apps/web/src/lib/api.ts` is a thin fetch wrapper around these routes (`NEXT_PUBLIC_API_URL`, defaults to `http://localhost:3001`), consumed via the React Query hooks in `apps/web/src/lib/hooks.ts` (`useTrades`, `useAccounts`, `useCreateTrade`). Note: the Performance page does **not** call `GET /api/performance` — it fetches the same `useTrades()` list Journal uses and derives stats/charts client-side via `trade-utils.ts`, so both pages share one cached data source instead of the browser needing two divergent aggregation implementations to agree. `GET /api/performance` still exists and works (e.g. for a future mobile client) but has no current caller. Two Performance cards exist only in that client-side path (`computePeriodStats` in `trade-utils.ts`):
-- **Avg Reward:Risk** = avg win ÷ |avg loss|, shown as `1 : 2.06`, or `—` without both wins and losses. Trades have no stop-loss field, so this is "realized" R:R.
+- **Avg Reward:Risk** = avg win ÷ |avg loss|, shown as a plain ratio like `2.06`, or `—` without both wins and losses. Trades have no stop-loss field, so this is "realized" R:R.
 - **Cost of Mistakes** = the summed P&L of **losing** `isMistake` trades in the period (`mistakeCost`). A winning mistake doesn't offset it.
 
 ## Architecture notes

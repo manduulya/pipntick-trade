@@ -220,7 +220,7 @@ describe("mistakes and reward:risk", () => {
       makeTrade({ id: "w2", pnl: "193.50" }), // avg win 246.75
       makeTrade({ id: "l1", pnl: "-119.80" }), // avg loss 119.80
     ];
-    expect(computePeriodStats(trades, "monthly", 0).rr).toBe("1 : 2.06");
+    expect(computePeriodStats(trades, "monthly", 0).rr).toBe("2.06");
   });
 
   it("shows no reward:risk without both wins and losses", () => {

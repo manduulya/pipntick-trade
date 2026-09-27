@@ -174,7 +174,7 @@ export type PeriodStats = {
   tradesSub: string;
   avgDuration: string;
   avgDurationSub: string;
-  /** Average reward:risk, "1 : 2.06" — avg win ÷ |avg loss|; "—" without both wins and losses. */
+  /** Average reward:risk, e.g. "2.06" — avg win ÷ |avg loss|; "—" without both wins and losses. */
   rr: string;
   rrSub: string;
   /** Losses on trades flagged as mistakes, e.g. "-$340.00" (see mistakeCost). */
@@ -245,7 +245,7 @@ export function computePeriodStats(closed: Trade[], period: Period, offset: numb
     tradesSub: periodLabel(period, offset),
     avgDuration: withDuration.length ? fmtDurationMinutes(avgDurationMinutes) : "—",
     avgDurationSub: "avg hold time",
-    rr: avgWinAmt > 0 && avgLossAmt > 0 ? `1 : ${(avgWinAmt / avgLossAmt).toFixed(2)}` : "—",
+    rr: avgWinAmt > 0 && avgLossAmt > 0 ? (avgWinAmt / avgLossAmt).toFixed(2) : "—",
     rrSub: "avg win ÷ avg loss",
     mistakeCost: mc.cost < 0 ? fmtCurrency(mc.cost) : "$0.00",
     mistakeCostZero: mc.cost === 0,
