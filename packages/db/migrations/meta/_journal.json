@@ -29,6 +29,13 @@
       "when": 1790550517514,
       "tag": "0003_trade_mistakes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790988099044,
+      "tag": "0004_broker_timezone",
+      "breakpoints": true
     }
   ]
 }

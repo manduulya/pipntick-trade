@@ -91,6 +91,7 @@ function fakeAccount(overrides: Record<string, unknown> = {}) {
     isDefault: false,
     status: "active",
     brokerUtcOffsetMinutes: null,
+    brokerTimezone: null,
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
     ...overrides,
@@ -184,6 +185,31 @@ describe("PATCH /api/accounts/:id — status", () => {
     const res = await app.inject(patch({ status: "active" }));
     expect(res.statusCode).toBe(200);
     expect(getUpdateSets()[0]).toMatchObject({ status: "active", isDefault: true });
+  });
+});
+
+describe("broker timezone", () => {
+  it("stores a valid IANA timezone on create and update", async () => {
+    queueSelect([]);
+    setInsertResult([fakeAccount({ brokerTimezone: "America/New_York" })]);
+    const app = await buildApp();
+    await app.inject({ method: "POST", url: "/api/accounts", payload: { name: "Futures", brokerTimezone: "America/New_York" } });
+    expect(getInsertValues()).toMatchObject({ brokerTimezone: "America/New_York" });
+
+    queueSelect([fakeAccount({ brokerTimezone: "America/New_York" })], []);
+    setUpdateResult([fakeAccount({ brokerTimezone: "Europe/Athens" })]);
+    const res = await app.inject(patch({ brokerTimezone: "Europe/Athens" }));
+    expect(res.statusCode).toBe(200);
+    expect(getUpdateSets().at(-1)).toMatchObject({ brokerTimezone: "Europe/Athens" });
+  });
+
+  it("rejects an unknown timezone", async () => {
+    const app = await buildApp();
+    const create = await app.inject({ method: "POST", url: "/api/accounts", payload: { name: "X", brokerTimezone: "Mars/Olympus" } });
+    expect(create.statusCode).toBe(400);
+    queueSelect([fakeAccount()]);
+    const update = await app.inject(patch({ brokerTimezone: "UTC-5" }));
+    expect(update.statusCode).toBe(400);
   });
 });
 

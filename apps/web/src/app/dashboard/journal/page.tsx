@@ -4,7 +4,15 @@ import React, { useState, useRef, useEffect } from "react";
 import type { Trade } from "@pipntick/shared";
 import { useTrades } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
-import { toJournalRow, type JournalRow } from "../../../lib/trade-utils";
+import {
+  inDateFilter,
+  periodLabel,
+  periodOffsetFor,
+  toJournalRow,
+  type JournalDateFilter,
+  type JournalRow,
+} from "../../../lib/trade-utils";
+import { toDateKey } from "../../../lib/trade-plan-utils";
 import { ApiError } from "../../../lib/api";
 import EmptyAccountsState from "../EmptyAccountsState";
 import Toast from "../Toast";
@@ -14,6 +22,7 @@ import { formatDate } from "../../../lib/time-format";
 import { TradeForm, type EntryMethod, entryTabs } from "../_components/TradeForm";
 import DeleteTradeModal from "../_components/DeleteTradeModal";
 import MistakePill from "../_components/MistakePill";
+import ViewOnChartButton from "../_components/ViewOnChartButton";
 import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
 
 type SortKey = "date" | "instrument" | "direction" | "pnl" | "duration";
@@ -184,10 +193,13 @@ export default function JournalPage() {
   // light backgrounds a white tint is effectively invisible, so flip to a dark tint there.
   const hoverOverlay = theme === "light" ? "0,0,0" : "255,255,255";
   const { data, isLoading, isError, error } = useTrades();
-  const { accounts, readOnly } = useSelectedAccount();
+  const { accounts, readOnly, selectedAccount } = useSelectedAccount();
   const { timeFormat } = useTimeFormat();
   const [search, setSearch]     = useState("");
   const [filter, setFilter]     = useState<"all" | "long" | "short" | "win" | "loss" | "mistakes">("all");
+  // Date filter: all time, a calendar day/week/month (paged with ‹ ›, same ranges as Performance),
+  // or a custom inclusive range. Applies on top of the type filter and search.
+  const [dateFilter, setDateFilter] = useState<JournalDateFilter>({ kind: "all" });
   const [sortKey, setSortKey]   = useState<SortKey>("date");
   const [sortDir, setSortDir]   = useState<SortDir>("desc");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -215,7 +227,7 @@ export default function JournalPage() {
         filter === "win"   ? (t.pnl ?? 0) > 0 :
         filter === "mistakes" ? t.isMistake :
         (t.pnl ?? 0) < 0;
-      return matchSearch && matchFilter;
+      return matchSearch && matchFilter && inDateFilter(t.date, dateFilter);
     })
     .sort((a, b) => {
       const mul = sortDir === "desc" ? -1 : 1;
@@ -229,6 +241,17 @@ export default function JournalPage() {
 
   const totalPnl = rows.reduce((s, t) => s + (t.pnl ?? 0), 0);
   const wins     = rows.filter((t) => (t.pnl ?? 0) > 0).length;
+
+  // Period paging is capped at the account's creation period (same as Performance) and at now.
+  const maxOffset =
+    dateFilter.kind === "period" && selectedAccount ? periodOffsetFor(dateFilter.period, new Date(selectedAccount.createdAt)) : 0;
+  const todayKey = toDateKey(new Date());
+  function pickRange(kind: "all" | "daily" | "weekly" | "monthly" | "custom") {
+    if (kind === "all") setDateFilter({ kind: "all" });
+    else if (kind === "custom") setDateFilter({ kind: "custom", from: `${todayKey.slice(0, 8)}01`, to: todayKey });
+    else setDateFilter({ kind: "period", period: kind, offset: 0 });
+  }
+  const activeRange = dateFilter.kind === "period" ? dateFilter.period : dateFilter.kind;
 
   if (!isLoading && !isError && accounts.length === 0) {
     return <EmptyAccountsState />;
@@ -301,9 +324,97 @@ export default function JournalPage() {
           <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>{rows.length} {rows.length === 1 ? "trade" : "trades"}</span>
           <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>{rows.length ? Math.round((wins / rows.length) * 100) : 0}% win rate</span>
           <span className="text-xs font-semibold" style={{ color: totalPnl >= 0 ? "var(--color-green-neon)" : "var(--color-danger)" }}>
-            {totalPnl >= 0 ? "+" : ""}${Math.abs(totalPnl).toFixed(2)} total P&L
+            {totalPnl > 0 ? "+" : totalPnl < 0 ? "-" : ""}${Math.abs(totalPnl).toFixed(2)} total P&L
           </span>
         </div>
+      </div>
+
+      {/* Date filter */}
+      <div className="flex items-center gap-3 shrink-0 flex-wrap">
+        <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}>
+          {([
+            ["all", "All time"],
+            ["daily", "Day"],
+            ["weekly", "Week"],
+            ["monthly", "Month"],
+            ["custom", "Custom"],
+          ] as const).map(([key, label]) => {
+            const on = activeRange === key;
+            return (
+              <button
+                key={key}
+                onClick={() => pickRange(key)}
+                className="px-3 py-1 text-xs font-medium rounded-md"
+                style={{
+                  backgroundColor: on ? "var(--color-border)" : "transparent",
+                  color: on ? "var(--color-text-primary)" : "var(--color-text-muted)",
+                  cursor: "pointer",
+                  transition: "background-color 0.3s ease, color 0.3s ease",
+                }}
+                onMouseEnter={(e) => { if (!on) { const el = e.currentTarget; el.style.backgroundColor = `rgba(${hoverOverlay},0.05)`; el.style.color = "var(--color-text-secondary)"; } }}
+                onMouseLeave={(e) => { if (!on) { const el = e.currentTarget; el.style.backgroundColor = "transparent"; el.style.color = "var(--color-text-muted)"; } }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {dateFilter.kind === "period" && (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setDateFilter({ ...dateFilter, offset: dateFilter.offset + 1 })}
+              disabled={dateFilter.offset >= maxOffset}
+              aria-label="Previous period"
+              className="focus-ring w-7 h-7 grid place-content-center rounded-md"
+              style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", opacity: dateFilter.offset >= maxOffset ? 0.4 : 1 }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4}><path d="M15 6l-6 6 6 6" /></svg>
+            </button>
+            <span className="text-xs font-semibold min-w-[150px] text-center" style={{ color: "var(--color-text-primary)" }}>
+              {periodLabel(dateFilter.period, dateFilter.offset)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setDateFilter({ ...dateFilter, offset: Math.max(0, dateFilter.offset - 1) })}
+              disabled={dateFilter.offset === 0}
+              aria-label="Next period"
+              className="focus-ring w-7 h-7 grid place-content-center rounded-md"
+              style={{ border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", opacity: dateFilter.offset === 0 ? 0.4 : 1 }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4}><path d="M9 6l6 6-6 6" /></svg>
+            </button>
+          </div>
+        )}
+
+        {dateFilter.kind === "custom" && (
+          <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
+            <label className="flex items-center gap-1.5">
+              From
+              <input
+                type="date"
+                value={dateFilter.from}
+                max={dateFilter.to || todayKey}
+                onChange={(e) => setDateFilter({ ...dateFilter, from: e.target.value })}
+                className="focus-ring rounded-md px-2 py-1 text-xs"
+                style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)", colorScheme: theme === "light" ? "light" : "dark" }}
+              />
+            </label>
+            <label className="flex items-center gap-1.5">
+              To
+              <input
+                type="date"
+                value={dateFilter.to}
+                min={dateFilter.from || undefined}
+                max={todayKey}
+                onChange={(e) => setDateFilter({ ...dateFilter, to: e.target.value })}
+                className="focus-ring rounded-md px-2 py-1 text-xs"
+                style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)", colorScheme: theme === "light" ? "light" : "dark" }}
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Table */}
@@ -389,7 +500,7 @@ export default function JournalPage() {
                       <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.duration}</td>
                       <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.session}</td>
                       <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: t.pnl === null ? "var(--color-text-muted)" : isWin ? "var(--color-green-neon)" : "var(--color-danger)" }}>
-                        {t.pnl === null ? "open" : `${isWin ? "+" : ""}$${Math.abs(t.pnl).toFixed(2)}`}
+                        {t.pnl === null ? "open" : `${t.pnl > 0 ? "+" : t.pnl < 0 ? "-" : ""}$${Math.abs(t.pnl).toFixed(2)}`}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" style={{ color: t.fees === null ? "var(--color-text-muted)" : t.fees < 0 ? "var(--color-danger)" : "var(--color-green-neon)" }}>
                         {t.fees === null ? "—" : `${t.fees >= 0 ? "+" : "-"}$${Math.abs(t.fees).toFixed(2)}`}
@@ -406,7 +517,9 @@ export default function JournalPage() {
                               </span>
                               {t.notes || (t.isMistake ? "No description recorded." : "No notes for this trade.")}
                             </p>
-                            {!readOnly && <div className="shrink-0 flex items-center gap-2">
+                            <div className="shrink-0 flex items-center gap-2">
+                              <ViewOnChartButton tradeId={t.id} />
+                              {!readOnly && <>
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -437,7 +550,8 @@ export default function JournalPage() {
                                 </svg>
                                 Delete
                               </button>
-                            </div>}
+                              </>}
+                            </div>
                           </div>
                         </td>
                       </tr>

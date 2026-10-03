@@ -21,6 +21,9 @@ export interface TradingAccount {
   /** Broker platform's server timezone as an offset from UTC in minutes (e.g. 180 for UTC+3).
    * Null = unset, meaning screenshot-imported times are treated as literal UTC (legacy behavior). */
   brokerUtcOffsetMinutes: number | null;
+  /** IANA timezone of the broker clock (e.g. "America/New_York"); follows daylight saving.
+   * Takes precedence over brokerUtcOffsetMinutes, which is only the legacy fallback. */
+  brokerTimezone: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -142,6 +145,8 @@ export interface CreateAccountInput {
   /** Broker platform's server timezone as an offset from UTC in minutes (e.g. 180 for UTC+3).
    * Omit/undefined leaves it unchanged (update) or unset (create); pass null to explicitly clear it. */
   brokerUtcOffsetMinutes?: number | null;
+  /** IANA timezone (e.g. "America/New_York"). Same absent/null/value rule as the offset. */
+  brokerTimezone?: string | null;
 }
 
 export type UpdateAccountInput = Partial<CreateAccountInput> & {
@@ -269,6 +274,33 @@ export interface UpdatePlanInput {
 /** A checklist item counts as met when a check is ticked or a choice has an answer. */
 export function isRuleMet(item: Pick<RuleSnapshotItem, "type" | "done" | "value">): boolean {
   return item.type === "choice" ? !!item.value : item.done;
+}
+
+// ─── Trade Review chart ────────────────────────────────────────────────────
+
+export type CandleInterval = "15m" | "30m" | "1h" | "4h";
+export const CANDLE_INTERVALS: readonly CandleInterval[] = ["15m", "30m", "1h", "4h"];
+
+/** One OHLC bar; `time` is unix seconds (UTC). */
+export interface Candle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+export interface CandlesResponse {
+  symbol: string;
+  /** The data source's ticker, e.g. "ES=F" for MES (micros chart their parent contract). */
+  ticker: string;
+  interval: CandleInterval;
+  /** Intervals whose history still covers this trade (finer ones expire after days/weeks). */
+  allowedIntervals: CandleInterval[];
+  /** The data is a stand-in for the traded instrument (e.g. gold futures for spot XAU/USD). */
+  approximate: boolean;
+  note: string | null;
+  candles: Candle[];
 }
 
 export interface PerformanceSummary {

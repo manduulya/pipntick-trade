@@ -26,6 +26,10 @@ export const tradingAccounts = pgTable("trading_accounts", {
   // broker-local time to a true UTC instant before it lands in the (UTC-labeled) form fields,
   // instead of treating the OCR digits as UTC as-is.
   brokerUtcOffsetMinutes: integer("broker_utc_offset_minutes"),
+  // IANA timezone of the broker platform's clock (e.g. "America/New_York"). Preferred over the
+  // fixed offset above because it follows daylight saving; when null, the offset is the fallback
+  // (legacy accounts). See accountWallClockToUtc in apps/web/src/lib/time-format.ts.
+  brokerTimezone: text("broker_timezone"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [

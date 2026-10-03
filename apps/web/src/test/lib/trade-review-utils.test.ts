@@ -1,0 +1,132 @@
+import { describe, expect, it } from "vitest";
+import type { Candle } from "@pipntick/shared";
+import {
+  buildTradeMarkers,
+  chartTimeZone,
+  checkTradeAgainstCandles,
+  formatChartTime,
+  MARK_COLORS,
+  pricePrecision,
+  snapToCandle,
+  tradeFocusRange,
+  tradeInstants,
+} from "../../lib/trade-review-utils";
+
+const bar = (time: number): Candle => ({ time, open: 1, high: 2, low: 0.5, close: 1.5 });
+const candles = [bar(1000), bar(1300), bar(1600), bar(1900)];
+
+describe("tradeInstants", () => {
+  it("converts broker wall-clock times with the account's timezone", () => {
+    const t = { entryTime: "2026-09-28T09:35:00.000Z", exitTime: "2026-09-28T10:38:00.000Z" };
+    const ny = tradeInstants(t, { brokerTimezone: "America/New_York" });
+    expect(ny.entry.toISOString()).toBe("2026-09-28T13:35:00.000Z");
+    expect(ny.exit?.toISOString()).toBe("2026-09-28T14:38:00.000Z");
+    expect(tradeInstants({ ...t, exitTime: null }, null).exit).toBeNull();
+  });
+});
+
+describe("snapToCandle", () => {
+  it("returns the candle containing the time", () => {
+    expect(snapToCandle(candles, 1450)).toBe(1300);
+    expect(snapToCandle(candles, 1600)).toBe(1600);
+    expect(snapToCandle(candles, 5000)).toBe(1900);
+  });
+
+  it("returns null before the data or with no data", () => {
+    expect(snapToCandle(candles, 500)).toBeNull();
+    expect(snapToCandle([], 1000)).toBeNull();
+  });
+});
+
+describe("buildTradeMarkers", () => {
+  const instants = { entry: new Date(1350 * 1000), exit: new Date(1700 * 1000) };
+
+  it("marks a buy entry with a green ▲ and a losing exit (the stop) with a red dot, labeled", () => {
+    const markers = buildTradeMarkers({ direction: "long", pnl: "-131.25", entryPrice: "7761.75", exitPrice: "7756.5" }, instants, candles);
+    expect(markers).toEqual([
+      { time: 1300, price: 7761.75, shape: "arrowUp", ...MARK_COLORS.green, label: "Entry 7761.75" },
+      { time: 1600, price: 7756.5, shape: "circle", ...MARK_COLORS.red, label: "Exit 7756.5" },
+    ]);
+  });
+
+  it("marks a sell entry with a red ▼, a winning exit green, and skips the exit for an open trade", () => {
+    const win = buildTradeMarkers({ direction: "short", pnl: "50", entryPrice: "100", exitPrice: "95" }, instants, candles);
+    expect(win.map((m) => [m.shape, m.fill])).toEqual([["arrowDown", MARK_COLORS.red.fill], ["circle", MARK_COLORS.green.fill]]);
+    const open = buildTradeMarkers(
+      { direction: "short", pnl: null, entryPrice: "100", exitPrice: null },
+      { entry: instants.entry, exit: null },
+      candles,
+    );
+    expect(open).toEqual([{ time: 1300, price: 100, shape: "arrowDown", ...MARK_COLORS.red, label: "Entry 100" }]);
+  });
+});
+
+describe("checkTradeAgainstCandles", () => {
+  // 15m gold candles trading ~4386-4410 around the entry and ~4318-4330 around the exit.
+  const gold = (time: number, low: number, high: number): Candle => ({ time, open: low, high, low, close: high });
+  const candles15 = [
+    gold(9000, 4386, 4400), gold(9900, 4390, 4410), gold(10800, 4388, 4405),
+    gold(90000, 4318, 4326), gold(90900, 4320, 4330), gold(91800, 4319, 4328),
+  ];
+  const instants = { entry: new Date(10000 * 1000), exit: new Date(91000 * 1000) };
+
+  it("accepts a trade whose prices traded at those times (within tolerance)", () => {
+    expect(checkTradeAgainstCandles({ entryPrice: "4401.5", exitPrice: "4325" }, instants, candles15, "15m")).toEqual([]);
+    // A few points past the range (0.1% ≈ 4.4 on gold) still passes for an exact source.
+    expect(checkTradeAgainstCandles({ entryPrice: "4413", exitPrice: "4325" }, instants, candles15, "15m")).toEqual([]);
+  });
+
+  it("is tight for exact sources but looser for stand-in data", () => {
+    // 10 points past the high: a wrong-timezone read looks like this on gold.
+    expect(checkTradeAgainstCandles({ entryPrice: "4420", exitPrice: "4325" }, instants, candles15, "15m")).toHaveLength(1);
+    // Spot XAU charted with gold futures (approximate) can legitimately sit that far apart.
+    expect(checkTradeAgainstCandles({ entryPrice: "4420", exitPrice: "4325" }, instants, candles15, "15m", true)).toEqual([]);
+  });
+
+  it("flags prices that never traded around then (the dummy MGC 4500 → 4600 trade)", () => {
+    const problems = checkTradeAgainstCandles({ entryPrice: "4500", exitPrice: "4600" }, instants, candles15, "15m");
+    expect(problems).toEqual([
+      { leg: "Entry", price: 4500, time: 10000, range: { low: 4386, high: 4410 } },
+      { leg: "Exit", price: 4600, time: 91000, range: { low: 4318, high: 4330 } },
+    ]);
+  });
+
+  it("flags a time with no market data near it", () => {
+    const closed = { entry: new Date(50000 * 1000), exit: null }; // between the two clusters (market closed)
+    expect(checkTradeAgainstCandles({ entryPrice: "4390", exitPrice: null }, closed, candles15, "15m")).toEqual([
+      { leg: "Entry", price: 4390, time: 50000, range: null },
+    ]);
+    expect(checkTradeAgainstCandles({ entryPrice: "4390", exitPrice: null }, { entry: new Date(100), exit: null }, candles15, "15m")[0].range)
+      .toBeNull();
+  });
+});
+
+describe("tradeFocusRange", () => {
+  it("opens on the trade plus ~30 candles either side", () => {
+    const instants = { entry: new Date(36_000 * 1000), exit: new Date(39_600 * 1000) };
+    expect(tradeFocusRange(instants, "1h")).toEqual({ from: 36_000 - 30 * 3600, to: 39_600 + 30 * 3600 });
+    expect(tradeFocusRange({ entry: instants.entry, exit: null }, "30m")).toEqual({ from: 36_000 - 54_000, to: 36_000 + 54_000 });
+    expect(tradeFocusRange({ entry: new Date(NaN), exit: null }, "15m")).toBeNull();
+  });
+});
+
+describe("chart display helpers", () => {
+  it("shows times in the account zone, mapping legacy whole-hour offsets to Etc zones", () => {
+    expect(chartTimeZone({ brokerTimezone: "America/Chicago" })).toBe("America/Chicago");
+    expect(chartTimeZone({ brokerUtcOffsetMinutes: -300 })).toBe("Etc/GMT+5");
+    expect(chartTimeZone({ brokerUtcOffsetMinutes: 120 })).toBe("Etc/GMT-2");
+    expect(chartTimeZone({ brokerUtcOffsetMinutes: 330 })).toBe("UTC");
+    expect(chartTimeZone(null)).toBe("UTC");
+  });
+
+  it("formats candle times in the zone", () => {
+    const t = Date.parse("2026-09-28T14:38:00Z") / 1000;
+    expect(formatChartTime(t, "America/New_York", false)).toBe("10:38");
+    expect(formatChartTime(t, "America/New_York", true)).toBe("Sep 28, 10:38");
+  });
+
+  it("uses forex precision for small prices", () => {
+    expect(pricePrecision(1.13714)).toBe(5);
+    expect(pricePrecision(7761.75)).toBe(2);
+  });
+});

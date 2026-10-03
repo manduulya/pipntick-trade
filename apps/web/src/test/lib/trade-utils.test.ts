@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Trade } from "@pipntick/shared";
 import {
+  balanceBefore,
+  computeCumulativePnl,
   computeCharts,
   computeDashboardStats,
   computeDirectionRows,
@@ -10,6 +12,7 @@ import {
   detectSession,
   filterByPeriod,
   formatDuration,
+  inDateFilter,
   isClosed,
   mistakeCost,
   periodLabel,
@@ -106,6 +109,44 @@ describe("periodLabel", () => {
   it("formats a weekly label spanning two months within the same year", () => {
     // Week of 2026-03-18 (Wed) is Mar 15 - Mar 21.
     expect(periodLabel("weekly", 0, new Date(2026, 2, 18))).toBe("Mar 15 - Mar 21, 2026");
+  });
+});
+
+describe("daily period", () => {
+  const now = new Date(2026, 9, 2, 15, 0); // Fri Oct 2 2026, local
+
+  it("covers one calendar day, paged by offset", () => {
+    const { start, end } = periodRange("daily", 0, now);
+    expect([start.getDate(), end.getDate()]).toEqual([2, 3]);
+    expect(periodRange("daily", 2, now).start.getDate()).toBe(30); // Sep 30
+    expect(periodLabel("daily", 0, now)).toBe("Fri, Oct 2, 2026");
+    expect(periodOffsetFor("daily", new Date(2026, 8, 28), now)).toBe(4);
+  });
+});
+
+describe("inDateFilter (Journal)", () => {
+  const now = new Date(2026, 9, 2, 15, 0); // Fri Oct 2 2026
+
+  it("passes everything for all time", () => {
+    expect(inDateFilter("2020-01-01", { kind: "all" }, now)).toBe(true);
+  });
+
+  it("matches calendar day / week (Sun–Sat) / month periods", () => {
+    expect(inDateFilter("2026-10-02", { kind: "period", period: "daily", offset: 0 }, now)).toBe(true);
+    expect(inDateFilter("2026-10-01", { kind: "period", period: "daily", offset: 0 }, now)).toBe(false);
+    expect(inDateFilter("2026-10-01", { kind: "period", period: "daily", offset: 1 }, now)).toBe(true);
+    // Week of Sun Sep 27 – Sat Oct 3.
+    expect(inDateFilter("2026-09-27", { kind: "period", period: "weekly", offset: 0 }, now)).toBe(true);
+    expect(inDateFilter("2026-09-26", { kind: "period", period: "weekly", offset: 0 }, now)).toBe(false);
+    expect(inDateFilter("2026-09-25", { kind: "period", period: "monthly", offset: 1 }, now)).toBe(true);
+    expect(inDateFilter("2026-10-02", { kind: "period", period: "monthly", offset: 1 }, now)).toBe(false);
+  });
+
+  it("matches an inclusive custom range, open-ended or reversed", () => {
+    const range = { kind: "custom" as const, from: "2026-09-22", to: "2026-09-25" };
+    expect(["2026-09-21", "2026-09-22", "2026-09-25", "2026-09-26"].map((d) => inDateFilter(d, range, now))).toEqual([false, true, true, false]);
+    expect(inDateFilter("2026-12-31", { kind: "custom", from: "2026-09-22", to: "" }, now)).toBe(true);
+    expect(inDateFilter("2026-09-23", { kind: "custom", from: "2026-09-25", to: "2026-09-22" }, now)).toBe(true);
   });
 });
 
@@ -347,6 +388,51 @@ describe("computeMonthCalendar", () => {
     } finally {
       process.env.TZ = originalTZ;
     }
+  });
+});
+
+describe("computeCumulativePnl", () => {
+  it("plots one point per trade from $0, in entry order", () => {
+    const trades = [
+      makeTrade({ id: "b", symbol: "MCL", entryTime: "2026-09-25T10:00:00.000Z", pnl: "-50.00" }),
+      makeTrade({ id: "a", symbol: "MGC", entryTime: "2026-09-22T10:00:00.000Z", pnl: "100.00" }),
+      makeTrade({ id: "c", symbol: "MES", entryTime: "2026-09-28T10:00:00.000Z", pnl: "30.00" }),
+    ];
+    const { points, net } = computeCumulativePnl(trades);
+    expect(points.map((p) => [p.index, p.symbol, p.cumulative])).toEqual([
+      [0, null, 0],
+      [1, "MGC", 100],
+      [2, "MCL", 50],
+      [3, "MES", 80],
+    ]);
+    expect(points[1].label).toBe("9/22");
+    expect(net).toBe(80);
+  });
+
+  it("measures the largest run-up and drawdown on the running P&L", () => {
+    // 0 → -200 → +300 → +100 → -150 → -50
+    const pnls = ["-200", "500", "-200", "-250", "100"];
+    const trades = pnls.map((pnl, i) => makeTrade({ id: `t${i}`, entryTime: `2026-09-0${i + 1}T10:00:00.000Z`, pnl }));
+    const { maxRunUp, maxDrawdown } = computeCumulativePnl(trades);
+    expect(maxRunUp).toBe(500); // -200 → +300
+    expect(maxDrawdown).toBe(450); // +300 → -150
+  });
+
+  it("is just the starting point with no trades", () => {
+    expect(computeCumulativePnl([])).toEqual({ points: [{ index: 0, label: "Start", symbol: null, pnl: 0, cumulative: 0 }], net: 0, maxRunUp: 0, maxDrawdown: 0 });
+  });
+});
+
+describe("balanceBefore", () => {
+  it("adds trades before the period to the starting balance", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 2, 12, 0));
+    const trades = [
+      makeTrade({ id: "sep", entryTime: "2026-09-20T10:00:00.000Z", pnl: "250.00" }),
+      makeTrade({ id: "oct", entryTime: "2026-10-01T10:00:00.000Z", pnl: "-40.00" }),
+    ];
+    expect(balanceBefore(trades, "monthly", 0, 50_000)).toBe(50_250); // October view starts after September's trade
+    vi.useRealTimers();
   });
 });
 

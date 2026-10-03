@@ -1,0 +1,1 @@
+ALTER TABLE "trading_accounts" ADD COLUMN "broker_timezone" text;

@@ -42,9 +42,10 @@ export default function AccountSettingsModal({
   const [currency, setCurrency] = useState(account.currency);
   const [startingBalance, setStartingBalance] = useState(account.startingBalance);
   const [createdAt, setCreatedAt] = useState(account.createdAt.slice(0, 10));
-  const [brokerUtcOffsetHours, setBrokerUtcOffsetHours] = useState(
-    account.brokerUtcOffsetMinutes != null ? String(account.brokerUtcOffsetMinutes / 60) : "",
-  );
+  const [brokerTimezone, setBrokerTimezone] = useState(account.brokerTimezone ?? "");
+  // Only send timezone fields once the user actually picks one — an untouched legacy account keeps
+  // its fixed offset rather than being silently switched to "not set".
+  const [timezoneTouched, setTimezoneTouched] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -141,7 +142,8 @@ export default function AccountSettingsModal({
           currency: currency.trim() || undefined,
           startingBalance: startingBalance !== "" ? Number(startingBalance) : undefined,
           createdAt: new Date(createdAt).toISOString(),
-          brokerUtcOffsetMinutes: brokerUtcOffsetHours.trim() === "" ? null : Math.round(Number(brokerUtcOffsetHours) * 60),
+          // Picking a zone (or "Not set") replaces the legacy fixed offset entirely.
+          ...(timezoneTouched ? { brokerTimezone: brokerTimezone || null, brokerUtcOffsetMinutes: null } : {}),
         },
       },
       {
@@ -280,7 +282,11 @@ export default function AccountSettingsModal({
               </p>
             )}
           </div>
-          <BrokerTimezoneField value={brokerUtcOffsetHours} onChange={setBrokerUtcOffsetHours} />
+          <BrokerTimezoneField
+            value={brokerTimezone}
+            legacyOffsetMinutes={timezoneTouched ? null : account.brokerUtcOffsetMinutes}
+            onChange={(zone) => { setBrokerTimezone(zone); setTimezoneTouched(true); }}
+          />
           </fieldset>
 
           {formError && (

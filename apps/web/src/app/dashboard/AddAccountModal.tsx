@@ -34,7 +34,7 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
   const [currency, setCurrency] = useState("USD");
   const [startingBalance, setStartingBalance] = useState("");
   const [createdAt, setCreatedAt] = useState(today);
-  const [brokerUtcOffsetHours, setBrokerUtcOffsetHours] = useState("");
+  const [brokerTimezone, setBrokerTimezone] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   const createAccount = useCreateAccount();
@@ -70,7 +70,7 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
         currency: currency.trim() || undefined,
         startingBalance: startingBalance ? Number(startingBalance) : undefined,
         createdAt: new Date(createdAt).toISOString(),
-        brokerUtcOffsetMinutes: brokerUtcOffsetHours.trim() === "" ? null : Math.round(Number(brokerUtcOffsetHours) * 60),
+        brokerTimezone: brokerTimezone || null,
       },
       {
         onSuccess: (account) => {
@@ -135,7 +135,7 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
             <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Account Created Date</label>
             <input type="date" max={today} value={createdAt} onChange={(e) => setCreatedAt(e.target.value)} style={inputStyle} />
           </div>
-          <BrokerTimezoneField value={brokerUtcOffsetHours} onChange={setBrokerUtcOffsetHours} />
+          <BrokerTimezoneField value={brokerTimezone} onChange={setBrokerTimezone} />
 
           {formError && (
             <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>{formError}</p>
