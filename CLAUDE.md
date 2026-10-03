@@ -199,6 +199,12 @@ Shared route helper: `apps/api/src/lib/resolve-account.ts`'s `resolveAccountId` 
 - **Avg Reward:Risk** = avg win ÷ |avg loss|, shown as a plain ratio like `2.06`, or `—` without both wins and losses. Trades have no stop-loss field, so this is "realized" R:R.
 - **Cost of Mistakes** = the summed P&L of **losing** `isMistake` trades in the period (`mistakeCost`). A winning mistake doesn't offset it.
 
+The Performance **Cumulative P&L** chart replaced the old "Portfolio Growth" line, which plotted a per-day balance from a $0 axis and read as flat.
+- **Data:** `computeCumulativePnl` gives one point per closed trade in the period, running from $0.
+- **Drawing:** the Y axis fits the data, with a zero `ReferenceLine`. Line and fill are green above zero and red below, via a gradient split at the zero offset.
+- **Header:** the period's net, max run-up and max drawdown, plus the balance at the period's start (`balanceBefore`) and end.
+- `computeCharts` still feeds the P&L Breakdown bars.
+
 ## Architecture notes
 
 - **Workspace deps**: `@pipntick/shared` and `@pipntick/db` are referenced as `workspace:*`. `apps/web`'s `next.config.ts` sets `transpilePackages: ["@pipntick/shared"]` since it's consumed as raw TS source (`main`/`types` point at `src/index.ts`, no build step). `apps/api` consumes both `@pipntick/db` and `@pipntick/shared` the same way (no build step needed under `tsx`).

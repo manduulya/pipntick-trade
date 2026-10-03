@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from "react";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
   BarChart, Bar, Cell,
 } from "recharts";
 import { useTrades } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
 import {
-  computeCharts, computeDirectionRows, computeInstrumentRows, computePeriodStats,
-  filterByPeriod, isClosed, periodLabel, periodOffsetFor, type Period,
+  balanceBefore, computeCharts, computeCumulativePnl, computeDirectionRows, computeInstrumentRows, computePeriodStats,
+  filterByPeriod, isClosed, periodLabel, periodOffsetFor, type CumulativePoint, type Period,
 } from "../../../lib/trade-utils";
 import { ApiError } from "../../../lib/api";
 import { useTheme } from "../../../lib/theme-context";
@@ -52,6 +52,29 @@ function PnlTooltip({ active, payload, label }: { active?: boolean; payload?: { 
       <p style={{ fontSize: 13, fontWeight: 600 }}>
         <span style={{ color: "var(--color-text-primary)" }}>P&L: </span>
         <span style={{ color }}>{sign}${Math.abs(val).toLocaleString()}</span>
+      </p>
+    </div>
+  );
+}
+
+function CumulativeTooltip({ active, payload }: { active?: boolean; payload?: { payload: CumulativePoint }[] }) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0].payload;
+  const color = (v: number) => (v >= 0 ? "var(--color-green-primary)" : "var(--color-danger)");
+  return (
+    <div style={{ backgroundColor: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600 }}>
+      <p style={{ color: "var(--color-text-primary)", marginBottom: 4 }}>
+        {p.index === 0 ? "Period start" : `#${p.index} · ${p.symbol} · ${p.label}`}
+      </p>
+      {p.index > 0 && (
+        <p>
+          <span style={{ color: "var(--color-text-muted)" }}>Trade: </span>
+          <span style={{ color: color(p.pnl) }}>{fmtPnl(p.pnl)}</span>
+        </p>
+      )}
+      <p>
+        <span style={{ color: "var(--color-text-muted)" }}>Cumulative: </span>
+        <span style={{ color: color(p.cumulative) }}>{fmtPnl(p.cumulative)}</span>
       </p>
     </div>
   );
@@ -104,10 +127,21 @@ export default function PerformancePage() {
     });
   }, [closed, sortKey, sortDir]);
   const dirs = useMemo(() => computeDirectionRows(closed), [closed]);
-  const { growthData, pnlData } = useMemo(
+  const { pnlData } = useMemo(
     () => computeCharts(allClosed, period, startingBalance, offset),
     [allClosed, period, startingBalance, offset],
   );
+  // Cumulative P&L: one point per trade in the period, from 0, with run-up / drawdown.
+  const cum = useMemo(() => computeCumulativePnl(closed), [closed]);
+  const periodStartBalance = useMemo(
+    () => balanceBefore(allClosed, period, offset, startingBalance),
+    [allClosed, period, offset, startingBalance],
+  );
+  // Split the line/fill color at zero: green above, red below (gradient stop at the 0 line).
+  const cumValues = cum.points.map((p) => p.cumulative);
+  const cumMax = Math.max(...cumValues);
+  const cumMin = Math.min(...cumValues);
+  const zeroOffset = cumMax <= 0 ? 0 : cumMin >= 0 ? 1 : cumMax / (cumMax - cumMin);
 
   const totalDirPnl = dirs[0].pnl + dirs[1].pnl;
   const longPct  = totalDirPnl !== 0 ? Math.round((dirs[0].pnl / totalDirPnl) * 100) : 50;
@@ -234,24 +268,76 @@ export default function PerformancePage() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {/* Portfolio Growth */}
+        {/* Cumulative P&L — one point per trade, from $0, green above / red below zero. */}
         <div className="rounded-xl p-4" style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}>
-          <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>Portfolio Growth</h2>
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={growthData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="growthGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={chartColors.areaStroke} stopOpacity={0.2} />
-                  <stop offset="95%" stopColor={chartColors.areaStroke} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.gridStroke} vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: chartColors.axisTick, fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: chartColors.axisTick, fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={fmtAxisDollar} width={36} />
-              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "var(--color-text-primary)" }} itemStyle={{ color: "var(--color-green-primary)" }} formatter={(v) => [v == null ? "—" : `$${Number(v).toLocaleString()}`, "Portfolio"]} cursor={{ stroke: chartColors.gridStroke }} />
-              <Area type="monotone" dataKey="value" stroke={chartColors.areaStroke} strokeWidth={2} fill="url(#growthGrad)" dot={false} activeDot={{ r: 4, fill: chartColors.areaStroke, stroke: chartColors.areaActiveDotStroke, strokeWidth: 2 }} />
-            </AreaChart>
-          </ResponsiveContainer>
+          <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>Cumulative P&L</h2>
+              <p className="text-[11px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                Balance ${periodStartBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} → $
+                {(periodStartBalance + cum.net).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+            <div className="flex gap-4 text-[11px]">
+              <div className="flex flex-col items-end">
+                <span style={{ color: "var(--color-text-muted)" }}>Net</span>
+                <span className="font-semibold" style={{ color: cum.net >= 0 ? "var(--color-green-primary)" : "var(--color-danger)" }}>{fmtPnl(cum.net)}</span>
+              </div>
+              <div className="flex flex-col items-end">
+                <span style={{ color: "var(--color-text-muted)" }}>Max run-up</span>
+                <span className="font-semibold" style={{ color: "var(--color-green-primary)" }}>+${cum.maxRunUp.toFixed(2)}</span>
+              </div>
+              <div className="flex flex-col items-end">
+                <span style={{ color: "var(--color-text-muted)" }}>Max drawdown</span>
+                <span className="font-semibold" style={{ color: "var(--color-danger)" }}>-${cum.maxDrawdown.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+          {cum.points.length < 2 ? (
+            <div className="h-[180px] flex items-center justify-center text-xs" style={{ color: "var(--color-text-muted)" }}>
+              No closed trades in this period.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={cum.points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="cumStroke" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset={zeroOffset} stopColor={chartColors.positive} />
+                    <stop offset={zeroOffset} stopColor={chartColors.negative} />
+                  </linearGradient>
+                  <linearGradient id="cumFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset={0} stopColor={chartColors.positive} stopOpacity={0.28} />
+                    <stop offset={zeroOffset} stopColor={chartColors.positive} stopOpacity={0.04} />
+                    <stop offset={zeroOffset} stopColor={chartColors.negative} stopOpacity={0.04} />
+                    <stop offset={1} stopColor={chartColors.negative} stopOpacity={0.28} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.gridStroke} vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: chartColors.axisTick, fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={18} />
+                <YAxis
+                  tick={{ fill: chartColors.axisTick, fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={fmtAxisDollar}
+                  width={44}
+                  // Fit the actual range (always including $0) instead of starting the axis at $0.
+                  domain={[(min: number) => Math.min(0, min) - Math.abs(min) * 0.08, (max: number) => Math.max(0, max) + Math.abs(max) * 0.08]}
+                />
+                <ReferenceLine y={0} stroke={chartColors.axisTick} strokeOpacity={0.6} />
+                <Tooltip content={<CumulativeTooltip />} cursor={{ stroke: chartColors.gridStroke }} />
+                <Area
+                  type="linear"
+                  dataKey="cumulative"
+                  baseValue={0}
+                  stroke="url(#cumStroke)"
+                  strokeWidth={2}
+                  fill="url(#cumFill)"
+                  dot={{ r: 2.5, fill: chartColors.areaActiveDotStroke, stroke: chartColors.areaStroke, strokeWidth: 1.5 }}
+                  activeDot={{ r: 4.5, fill: chartColors.areaStroke, stroke: chartColors.areaActiveDotStroke, strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         {/* P&L Breakdown */}

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Trade } from "@pipntick/shared";
 import {
+  balanceBefore,
+  computeCumulativePnl,
   computeCharts,
   computeDashboardStats,
   computeDirectionRows,
@@ -386,6 +388,51 @@ describe("computeMonthCalendar", () => {
     } finally {
       process.env.TZ = originalTZ;
     }
+  });
+});
+
+describe("computeCumulativePnl", () => {
+  it("plots one point per trade from $0, in entry order", () => {
+    const trades = [
+      makeTrade({ id: "b", symbol: "MCL", entryTime: "2026-09-25T10:00:00.000Z", pnl: "-50.00" }),
+      makeTrade({ id: "a", symbol: "MGC", entryTime: "2026-09-22T10:00:00.000Z", pnl: "100.00" }),
+      makeTrade({ id: "c", symbol: "MES", entryTime: "2026-09-28T10:00:00.000Z", pnl: "30.00" }),
+    ];
+    const { points, net } = computeCumulativePnl(trades);
+    expect(points.map((p) => [p.index, p.symbol, p.cumulative])).toEqual([
+      [0, null, 0],
+      [1, "MGC", 100],
+      [2, "MCL", 50],
+      [3, "MES", 80],
+    ]);
+    expect(points[1].label).toBe("9/22");
+    expect(net).toBe(80);
+  });
+
+  it("measures the largest run-up and drawdown on the running P&L", () => {
+    // 0 → -200 → +300 → +100 → -150 → -50
+    const pnls = ["-200", "500", "-200", "-250", "100"];
+    const trades = pnls.map((pnl, i) => makeTrade({ id: `t${i}`, entryTime: `2026-09-0${i + 1}T10:00:00.000Z`, pnl }));
+    const { maxRunUp, maxDrawdown } = computeCumulativePnl(trades);
+    expect(maxRunUp).toBe(500); // -200 → +300
+    expect(maxDrawdown).toBe(450); // +300 → -150
+  });
+
+  it("is just the starting point with no trades", () => {
+    expect(computeCumulativePnl([])).toEqual({ points: [{ index: 0, label: "Start", symbol: null, pnl: 0, cumulative: 0 }], net: 0, maxRunUp: 0, maxDrawdown: 0 });
+  });
+});
+
+describe("balanceBefore", () => {
+  it("adds trades before the period to the starting balance", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 2, 12, 0));
+    const trades = [
+      makeTrade({ id: "sep", entryTime: "2026-09-20T10:00:00.000Z", pnl: "250.00" }),
+      makeTrade({ id: "oct", entryTime: "2026-10-01T10:00:00.000Z", pnl: "-40.00" }),
+    ];
+    expect(balanceBefore(trades, "monthly", 0, 50_000)).toBe(50_250); // October view starts after September's trade
+    vi.useRealTimers();
   });
 });
 

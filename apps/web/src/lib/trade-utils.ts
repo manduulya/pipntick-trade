@@ -394,6 +394,61 @@ export function computeCharts(
   return { growthData, pnlData };
 }
 
+// ---- Cumulative P&L (Performance) ----
+
+export type CumulativePoint = {
+  /** 0 = the period's starting point, then 1..n = each closed trade in order. */
+  index: number;
+  label: string;
+  symbol: string | null;
+  /** That trade's P&L (0 for the starting point). */
+  pnl: number;
+  /** Running P&L for the period after this trade. */
+  cumulative: number;
+};
+
+export type CumulativeSummary = {
+  points: CumulativePoint[];
+  net: number;
+  /** Largest rise from a low point to a later high (≥ 0). */
+  maxRunUp: number;
+  /** Largest fall from a high point to a later low (≥ 0). */
+  maxDrawdown: number;
+};
+
+/**
+ * One point per closed trade in the period, in entry order, plotting the running P&L from 0 —
+ * so every win and loss shows as a move (a per-day balance line from $0 read as flat: a few
+ * thousand dollars against a ~$50k balance, and most days have no trades). Also the period's
+ * largest run-up and drawdown, measured on the running P&L.
+ */
+export function computeCumulativePnl(closedInPeriod: Trade[]): CumulativeSummary {
+  const sorted = [...closedInPeriod].sort((a, b) => a.entryTime.localeCompare(b.entryTime));
+  const points: CumulativePoint[] = [{ index: 0, label: "Start", symbol: null, pnl: 0, cumulative: 0 }];
+  let cumulative = 0;
+  let peak = 0;
+  let trough = 0;
+  let maxRunUp = 0;
+  let maxDrawdown = 0;
+  sorted.forEach((t, i) => {
+    const pnl = pnlOf(t);
+    cumulative += pnl;
+    const d = utcWallClock(t.entryTime);
+    points.push({ index: i + 1, label: `${d.getMonth() + 1}/${d.getDate()}`, symbol: t.symbol, pnl, cumulative });
+    peak = Math.max(peak, cumulative);
+    trough = Math.min(trough, cumulative);
+    maxDrawdown = Math.max(maxDrawdown, peak - cumulative);
+    maxRunUp = Math.max(maxRunUp, cumulative - trough);
+  });
+  return { points, net: cumulative, maxRunUp, maxDrawdown };
+}
+
+/** Running P&L before the period: the balance the period starts from (starting balance + earlier trades). */
+export function balanceBefore(allClosed: Trade[], period: Period, offset: number, startingBalance: number): number {
+  const { start } = periodRange(period, offset);
+  return allClosed.reduce((s, t) => (utcWallClock(t.entryTime) < start ? s + pnlOf(t) : s), startingBalance);
+}
+
 // ---- Dashboard ----
 
 export function computeDashboardStats(allClosed: Trade[]) {
