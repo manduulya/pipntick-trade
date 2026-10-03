@@ -316,11 +316,42 @@ html {
   animation-timing-function: ease;
 }
 
-/* Thin, theme-colored scrollbar for internally-scrolling modal bodies and dropdown panels — the
-   OS default (esp. Windows' non-overlay scrollbar, with its wide track and up/down arrow
-   buttons) clashes with the app's flat, custom-drawn chrome. Opt-in via .thin-scrollbar rather
-   than applied globally, since most scrollable areas in the app (Journal table, page content)
-   are full-bleed and fine with the browser default. */
+/* App-wide scrollbars: the same slim, rounded, track-less thumb as the Trade Plan columns, on
+   every scrolling element (page bodies, the Journal table, modals, dropdowns). Windows' default
+   white scrollbar with arrow buttons clashed with the dark, flat UI. `:where()` keeps specificity
+   at zero so .thin-scrollbar / .plan-scroll below still win where they're used. Standard
+   properties cover Firefox and Chromium 121+ (where they take precedence over ::-webkit-*);
+   the ::-webkit-* rules cover older Chromium and Safari. */
+:where(html, *) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+:where(html, *):hover {
+  scrollbar-color: var(--color-border-hover) transparent;
+}
+
+:where(html, *)::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+:where(html, *)::-webkit-scrollbar-track,
+:where(html, *)::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+:where(html, *)::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 999px;
+}
+
+:where(html, *)::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-green-primary);
+}
+
+/* Slightly stronger thin scrollbar for modal bodies and dropdown panels (predates the global rule
+   above; kept for its brighter resting thumb). */
 .thin-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-hover) transparent;
