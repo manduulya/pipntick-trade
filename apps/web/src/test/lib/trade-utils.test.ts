@@ -10,6 +10,7 @@ import {
   detectSession,
   filterByPeriod,
   formatDuration,
+  inDateFilter,
   isClosed,
   mistakeCost,
   periodLabel,
@@ -106,6 +107,44 @@ describe("periodLabel", () => {
   it("formats a weekly label spanning two months within the same year", () => {
     // Week of 2026-03-18 (Wed) is Mar 15 - Mar 21.
     expect(periodLabel("weekly", 0, new Date(2026, 2, 18))).toBe("Mar 15 - Mar 21, 2026");
+  });
+});
+
+describe("daily period", () => {
+  const now = new Date(2026, 9, 2, 15, 0); // Fri Oct 2 2026, local
+
+  it("covers one calendar day, paged by offset", () => {
+    const { start, end } = periodRange("daily", 0, now);
+    expect([start.getDate(), end.getDate()]).toEqual([2, 3]);
+    expect(periodRange("daily", 2, now).start.getDate()).toBe(30); // Sep 30
+    expect(periodLabel("daily", 0, now)).toBe("Fri, Oct 2, 2026");
+    expect(periodOffsetFor("daily", new Date(2026, 8, 28), now)).toBe(4);
+  });
+});
+
+describe("inDateFilter (Journal)", () => {
+  const now = new Date(2026, 9, 2, 15, 0); // Fri Oct 2 2026
+
+  it("passes everything for all time", () => {
+    expect(inDateFilter("2020-01-01", { kind: "all" }, now)).toBe(true);
+  });
+
+  it("matches calendar day / week (Sun–Sat) / month periods", () => {
+    expect(inDateFilter("2026-10-02", { kind: "period", period: "daily", offset: 0 }, now)).toBe(true);
+    expect(inDateFilter("2026-10-01", { kind: "period", period: "daily", offset: 0 }, now)).toBe(false);
+    expect(inDateFilter("2026-10-01", { kind: "period", period: "daily", offset: 1 }, now)).toBe(true);
+    // Week of Sun Sep 27 – Sat Oct 3.
+    expect(inDateFilter("2026-09-27", { kind: "period", period: "weekly", offset: 0 }, now)).toBe(true);
+    expect(inDateFilter("2026-09-26", { kind: "period", period: "weekly", offset: 0 }, now)).toBe(false);
+    expect(inDateFilter("2026-09-25", { kind: "period", period: "monthly", offset: 1 }, now)).toBe(true);
+    expect(inDateFilter("2026-10-02", { kind: "period", period: "monthly", offset: 1 }, now)).toBe(false);
+  });
+
+  it("matches an inclusive custom range, open-ended or reversed", () => {
+    const range = { kind: "custom" as const, from: "2026-09-22", to: "2026-09-25" };
+    expect(["2026-09-21", "2026-09-22", "2026-09-25", "2026-09-26"].map((d) => inDateFilter(d, range, now))).toEqual([false, true, true, false]);
+    expect(inDateFilter("2026-12-31", { kind: "custom", from: "2026-09-22", to: "" }, now)).toBe(true);
+    expect(inDateFilter("2026-09-23", { kind: "custom", from: "2026-09-25", to: "2026-09-22" }, now)).toBe(true);
   });
 });
 

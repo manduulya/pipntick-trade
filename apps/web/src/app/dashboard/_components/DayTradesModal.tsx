@@ -107,7 +107,7 @@ export default function DayTradesModal({
                       </span>
                     </div>
                     <span className="shrink-0 text-sm font-bold" style={{ color: row.pnl === null ? "var(--color-text-muted)" : isWin ? "var(--color-green-neon)" : "var(--color-danger)" }}>
-                      {row.pnl === null ? "open" : `${isWin ? "+" : ""}$${Math.abs(row.pnl).toFixed(2)}`}
+                      {row.pnl === null ? "open" : `${row.pnl > 0 ? "+" : row.pnl < 0 ? "-" : ""}$${Math.abs(row.pnl).toFixed(2)}`}
                     </span>
                   </div>
 

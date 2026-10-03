@@ -1,6 +1,6 @@
 import type { Trade } from "@pipntick/shared";
 
-export type Period = "weekly" | "monthly" | "yearly";
+export type Period = "daily" | "weekly" | "monthly" | "yearly";
 
 // entryTime/exitTime are entered and stored as literal wall-clock digits in the account's
 // broker-server timezone (TradeForm appends "Z" to whatever the user typed — see its date-field
@@ -40,11 +40,16 @@ export function detectSession(timeStr: string): string {
   return "Sydney";
 }
 
-// Calendar-aligned, not a rolling window: "weekly" is Sun-Sat of a given week, "monthly" is the
-// 1st through the last day of a given month, "yearly" is Jan 1 - Dec 31 of a given year.
-// `offset` counts periods back from `from` (0 = the period containing `from`, 1 = the previous
-// period, etc.) so callers can page backward/forward through history.
+// Calendar-aligned, not a rolling window: "daily" is one calendar day, "weekly" is Sun-Sat of a
+// given week, "monthly" is the 1st through the last day of a given month, "yearly" is Jan 1 -
+// Dec 31 of a given year. `offset` counts periods back from `from` (0 = the period containing
+// `from`, 1 = the previous period, etc.) so callers can page backward/forward through history.
 export function periodRange(period: Period, offset: number = 0, from: Date = new Date()): { start: Date; end: Date } {
+  if (period === "daily") {
+    const start = new Date(from.getFullYear(), from.getMonth(), from.getDate() - offset);
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
+    return { start, end };
+  }
   if (period === "weekly") {
     const start = new Date(from.getFullYear(), from.getMonth(), from.getDate() - from.getDay() - offset * 7);
     const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
@@ -63,6 +68,11 @@ export function periodRange(period: Period, offset: number = 0, from: Date = new
 // How many periods back `date` falls from `from` — used to cap back-navigation at the account's
 // creation period (can't page earlier than the period the account was created in).
 export function periodOffsetFor(period: Period, date: Date, from: Date = new Date()): number {
+  if (period === "daily") {
+    const fromDay = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    const dateDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    return Math.max(0, Math.round((fromDay.getTime() - dateDay.getTime()) / 86400000));
+  }
   if (period === "weekly") {
     const fromWeekStart = new Date(from.getFullYear(), from.getMonth(), from.getDate() - from.getDay());
     const dateWeekStart = new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay());
@@ -75,9 +85,13 @@ export function periodOffsetFor(period: Period, date: Date, from: Date = new Dat
 }
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function periodLabel(period: Period, offset: number = 0, from: Date = new Date()): string {
   const { start, end } = periodRange(period, offset, from);
+  if (period === "daily") {
+    return `${DAY_NAMES[start.getDay()]}, ${MONTH_NAMES[start.getMonth()].slice(0, 3)} ${start.getDate()}, ${start.getFullYear()}`;
+  }
   if (period === "weekly") {
     const last = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 1);
     const fmt = (d: Date) => `${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getDate()}`;
@@ -93,6 +107,33 @@ export function filterByPeriod(trades: Trade[], period: Period, offset: number =
     const d = utcWallClock(t.entryTime);
     return d >= start && d < end;
   });
+}
+
+// ─── Journal date filter ──────────────────────────────────────────────────
+
+export type JournalDateFilter =
+  | { kind: "all" }
+  | { kind: "period"; period: "daily" | "weekly" | "monthly"; offset: number }
+  /** Inclusive "YYYY-MM-DD" days; either end may be "" (open-ended). */
+  | { kind: "custom"; from: string; to: string };
+
+const dayKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/**
+ * Whether a trade's wall-clock entry day ("YYYY-MM-DD", i.e. JournalRow.date — the broker-clock
+ * date the trader sees, same bucketing as the calendar) falls inside the filter. Periods are the
+ * same calendar-aligned ranges Performance uses (periodRange).
+ */
+export function inDateFilter(date: string, filter: JournalDateFilter, now: Date = new Date()): boolean {
+  if (filter.kind === "all") return true;
+  if (filter.kind === "custom") {
+    // Tolerate a reversed range (from after to) instead of silently matching nothing.
+    const [lo, hi] = filter.from && filter.to && filter.from > filter.to ? [filter.to, filter.from] : [filter.from, filter.to];
+    return (!lo || date >= lo) && (!hi || date <= hi);
+  }
+  const { start, end } = periodRange(filter.period, filter.offset, now);
+  return date >= dayKey(start) && date < dayKey(end);
 }
 
 export function isClosed(t: Trade): boolean {
