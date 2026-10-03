@@ -83,7 +83,7 @@ export const api = {
   },
   candles: {
     /** `entry`/`exit` are real UTC instants (ISO) — convert broker wall-clock times first. */
-    get: (token: string | null, params: { symbol: string; entry: string; exit?: string; interval: CandleInterval | "auto" }) => {
+    get: (token: string | null, params: { symbol: string; entry: string; exit?: string; interval: CandleInterval }) => {
       const qs = new URLSearchParams({ symbol: params.symbol, entry: params.entry, interval: params.interval });
       if (params.exit) qs.set("exit", params.exit);
       return request<CandlesResponse>(`/api/candles?${qs.toString()}`, token);

@@ -53,17 +53,16 @@ export function toYahooTicker(symbol: string): TickerInfo | null {
 
 // ─── Intervals ────────────────────────────────────────────────────────────
 
-const INTERVALS: { key: CandleInterval; yahoo: string; seconds: number; maxAgeDays: number }[] = [
-  { key: "1m", yahoo: "1m", seconds: 60, maxAgeDays: 7 },
-  { key: "5m", yahoo: "5m", seconds: 300, maxAgeDays: 59 },
+// Yahoo has no 4h bars, so 4h is fetched as 1h and aggregated (`aggregate`), buckets aligned to UTC.
+const INTERVALS: { key: CandleInterval; yahoo: string; seconds: number; maxAgeDays: number; aggregate?: number }[] = [
   { key: "15m", yahoo: "15m", seconds: 900, maxAgeDays: 59 },
+  { key: "30m", yahoo: "30m", seconds: 1800, maxAgeDays: 59 },
   { key: "1h", yahoo: "60m", seconds: 3600, maxAgeDays: 729 },
-  { key: "1d", yahoo: "1d", seconds: 86_400, maxAgeDays: Number.POSITIVE_INFINITY },
+  { key: "4h", yahoo: "60m", seconds: 14_400, maxAgeDays: 729, aggregate: 4 },
 ];
-const MAX_AUTO_CANDLES = 400;
 const PAD_CANDLES = 40;
 
-export type CandleWindow = { interval: CandleInterval; yahooInterval: string; from: number; to: number };
+export type CandleWindow = { interval: CandleInterval; yahooInterval: string; from: number; to: number; aggregateSeconds?: number };
 
 /** The window around a trade for one interval: padded by max(trade duration, 40 candles). */
 function windowFor(i: (typeof INTERVALS)[number], entryMs: number, exitMs: number, nowMs: number) {
@@ -77,29 +76,40 @@ export function allowedIntervals(entryMs: number, exitMs: number, nowMs: number)
 }
 
 /**
- * Picks the interval + window to fetch. "auto" = the finest allowed interval that keeps the
- * window at or under ~400 candles. Returns null for an explicit interval that's out of range.
+ * Picks the interval + window to fetch. If the requested interval's history no longer reaches the
+ * trade (15m/30m only go back ~60 days), falls back to the next coarser one that does. Returns
+ * null when even the coarsest (4h, ~2 years) can't reach it.
  */
-export function pickWindow(
-  entryMs: number,
-  exitMs: number,
-  nowMs: number,
-  requested: CandleInterval | "auto" = "auto",
-): CandleWindow | null {
-  const allowed = INTERVALS.filter((i) => allowedIntervals(entryMs, exitMs, nowMs).includes(i.key));
-  let choice: (typeof INTERVALS)[number] | undefined;
-  if (requested === "auto") {
-    choice =
-      allowed.find((i) => {
-        const w = windowFor(i, entryMs, exitMs, nowMs);
-        return (w.to - w.from) / (i.seconds * 1000) <= MAX_AUTO_CANDLES;
-      }) ?? allowed[allowed.length - 1];
-  } else {
-    choice = allowed.find((i) => i.key === requested);
-  }
+export function pickWindow(entryMs: number, exitMs: number, nowMs: number, requested: CandleInterval = "15m"): CandleWindow | null {
+  const allowed = allowedIntervals(entryMs, exitMs, nowMs);
+  const from = INTERVALS.findIndex((i) => i.key === requested);
+  const choice = INTERVALS.slice(Math.max(0, from)).find((i) => allowed.includes(i.key));
   if (!choice) return null;
   const w = windowFor(choice, entryMs, exitMs, nowMs);
-  return { interval: choice.key, yahooInterval: choice.yahoo, from: w.from, to: w.to };
+  return {
+    interval: choice.key,
+    yahooInterval: choice.yahoo,
+    from: w.from,
+    to: w.to,
+    ...(choice.aggregate ? { aggregateSeconds: choice.seconds } : {}),
+  };
+}
+
+/** Merges finer candles into `bucketSeconds` bars aligned to UTC (e.g. 1h -> 4h at 00/04/08…). */
+export function aggregateCandles(candles: Candle[], bucketSeconds: number): Candle[] {
+  const out: Candle[] = [];
+  for (const c of candles) {
+    const bucket = Math.floor(c.time / bucketSeconds) * bucketSeconds;
+    const last = out[out.length - 1];
+    if (last && last.time === bucket) {
+      last.high = Math.max(last.high, c.high);
+      last.low = Math.min(last.low, c.low);
+      last.close = c.close;
+    } else {
+      out.push({ time: bucket, open: c.open, high: c.high, low: c.low, close: c.close });
+    }
+  }
+  return out;
 }
 
 // ─── Fetch + parse ────────────────────────────────────────────────────────
@@ -149,7 +159,7 @@ export async function fetchCandles(ticker: string, w: CandleWindow, nowMs = Date
   const step = INTERVALS.find((i) => i.key === w.interval)!.seconds;
   const p1 = Math.floor(w.from / 1000 / step) * step;
   const p2 = Math.ceil(w.to / 1000 / step) * step;
-  const key = `${ticker}|${w.yahooInterval}|${p1}|${p2}`;
+  const key = `${ticker}|${w.interval}|${p1}|${p2}`;
   const hit = cache.get(key);
   if (hit && hit.expires > nowMs) return hit.candles;
 
@@ -163,7 +173,8 @@ export async function fetchCandles(ticker: string, w: CandleWindow, nowMs = Date
   if (!res.ok) throw new MarketDataError(`Yahoo responded ${res.status}`);
   const json = (await res.json()) as YahooChart;
   if (json.chart?.error) throw new MarketDataError(`Yahoo error: ${json.chart.error.description ?? json.chart.error.code}`);
-  const candles = parseYahooChart(json);
+  const parsed = parseYahooChart(json);
+  const candles = w.aggregateSeconds ? aggregateCandles(parsed, w.aggregateSeconds) : parsed;
 
   if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
   cache.set(key, { expires: nowMs + cacheTtlMs(w.to, nowMs), candles });

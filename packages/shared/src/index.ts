@@ -278,8 +278,8 @@ export function isRuleMet(item: Pick<RuleSnapshotItem, "type" | "done" | "value"
 
 // ─── Trade Review chart ────────────────────────────────────────────────────
 
-export type CandleInterval = "1m" | "5m" | "15m" | "1h" | "1d";
-export const CANDLE_INTERVALS: readonly CandleInterval[] = ["1m", "5m", "15m", "1h", "1d"];
+export type CandleInterval = "15m" | "30m" | "1h" | "4h";
+export const CANDLE_INTERVALS: readonly CandleInterval[] = ["15m", "30m", "1h", "4h"];
 
 /** One OHLC bar; `time` is unix seconds (UTC). */
 export interface Candle {

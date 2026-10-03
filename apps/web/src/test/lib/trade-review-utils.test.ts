@@ -43,8 +43,8 @@ describe("buildTradeMarkers", () => {
   it("marks a long entry below the bar and a losing exit in red", () => {
     const markers = buildTradeMarkers({ direction: "long", pnl: "-131.25", entryPrice: "7761.75", exitPrice: "7756.5" }, instants, candles);
     expect(markers).toEqual([
-      { time: 1300, position: "atPriceBottom", price: 7761.75, shape: "arrowUp", color: "#7cc943", text: "Long 7761.75" },
-      { time: 1600, position: "atPriceMiddle", price: 7756.5, shape: "circle", color: "#f05252", text: "Exit 7756.5" },
+      { time: 1300, position: "atPriceBottom", price: 7761.75, shape: "arrowUp", color: "#7cc943" },
+      { time: 1600, position: "atPriceMiddle", price: 7756.5, shape: "circle", color: "#f05252" },
     ]);
   });
 
@@ -54,7 +54,7 @@ describe("buildTradeMarkers", () => {
       { entry: instants.entry, exit: null },
       candles,
     );
-    expect(markers).toEqual([{ time: 1300, position: "atPriceTop", price: 100, shape: "arrowDown", color: "#f05252", text: "Short 100" }]);
+    expect(markers).toEqual([{ time: 1300, position: "atPriceTop", price: 100, shape: "arrowDown", color: "#f05252" }]);
   });
 });
 
@@ -102,8 +102,8 @@ describe("tradeFocusRange", () => {
   it("opens on the trade plus ~30 candles either side", () => {
     const instants = { entry: new Date(36_000 * 1000), exit: new Date(39_600 * 1000) };
     expect(tradeFocusRange(instants, "1h")).toEqual({ from: 36_000 - 30 * 3600, to: 39_600 + 30 * 3600 });
-    expect(tradeFocusRange({ entry: instants.entry, exit: null }, "5m")).toEqual({ from: 36_000 - 9000, to: 36_000 + 9000 });
-    expect(tradeFocusRange({ entry: new Date(NaN), exit: null }, "5m")).toBeNull();
+    expect(tradeFocusRange({ entry: instants.entry, exit: null }, "30m")).toEqual({ from: 36_000 - 54_000, to: 36_000 + 54_000 });
+    expect(tradeFocusRange({ entry: new Date(NaN), exit: null }, "15m")).toBeNull();
   });
 });
 

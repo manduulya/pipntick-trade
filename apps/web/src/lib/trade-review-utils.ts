@@ -29,7 +29,7 @@ export function snapToCandle(candles: Candle[], seconds: number): number | null 
 
 // ─── Does the trade match the market? ─────────────────────────────────────
 
-const INTERVAL_SECONDS: Record<string, number> = { "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "1d": 86_400 };
+const INTERVAL_SECONDS: Record<string, number> = { "15m": 900, "30m": 1800, "1h": 3600, "4h": 14_400 };
 
 /**
  * How far outside the traded range a price may sit and still count as matching. Exact sources
@@ -93,7 +93,6 @@ export type ChartMarker = {
   price: number;
   shape: "arrowUp" | "arrowDown" | "circle";
   color: string;
-  text: string;
 };
 
 const GREEN = "#7cc943";
@@ -103,7 +102,9 @@ const NEUTRAL = "#c9d1dc";
 /**
  * Entry and exit markers, drawn at the trade's actual prices: a long enters with ▲ (pointing up at
  * the price from below), a short with ▼ from above; the exit is a circle colored by the trade's
- * outcome. Points outside the loaded candles are skipped.
+ * outcome. No text on the markers — when entry and exit share a candle their labels overlapped
+ * into an unreadable smear; the prices are on the labeled Entry/Exit price lines instead.
+ * Points outside the loaded candles are skipped.
  */
 export function buildTradeMarkers(
   trade: Pick<Trade, "direction" | "pnl" | "entryPrice" | "exitPrice">,
@@ -120,7 +121,6 @@ export function buildTradeMarkers(
       price: Number(trade.entryPrice),
       shape: long ? "arrowUp" : "arrowDown",
       color: long ? GREEN : RED,
-      text: `${long ? "Long" : "Short"} ${Number(trade.entryPrice)}`,
     });
   }
   if (instants.exit && trade.exitPrice !== null) {
@@ -133,7 +133,6 @@ export function buildTradeMarkers(
         price: Number(trade.exitPrice),
         shape: "circle",
         color: pnl === null ? NEUTRAL : pnl >= 0 ? GREEN : RED,
-        text: `Exit ${Number(trade.exitPrice)}`,
       });
     }
   }

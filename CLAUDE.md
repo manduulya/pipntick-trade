@@ -16,7 +16,7 @@ Phase 1 ships Dashboard, Trade Plan, Journal, Performance, and Trade Review as t
 
 Don't delete either the `ComingSoon` gate or the preserved News implementation without being asked — the gate is a deliberate product decision, not a stub to clean up.
 
-**Trade Review** (`apps/web/src/app/dashboard/review/`) shows a selected trade (`?trade=<id>`, defaulting to the newest) on a TradingView **Lightweight Charts** candlestick chart (`review/_components/TradeChart.tsx`; Apache-2.0, keep its default attribution logo). The chart shows entry/exit markers, dashed entry/exit price lines, and axis times in the account's timezone (`chartTimeZone`). Candles come from `GET /api/candles` (see API notes), via `useCandles`. Trade wall-clock times are converted to real instants with the account's timezone first (`tradeInstants` in `lib/trade-review-utils.ts`). Markers sit at the trade's actual prices (`atPrice*` positions), and autoscale keeps the price lines in view.
+**Trade Review** (`apps/web/src/app/dashboard/review/`) shows a selected trade (`?trade=<id>`, defaulting to the newest) on a TradingView **Lightweight Charts** candlestick chart (`review/_components/TradeChart.tsx`; Apache-2.0, keep its default attribution logo). The chart shows entry/exit markers, dashed entry/exit price lines, and axis times in the account's timezone (`chartTimeZone`). Candles come from `GET /api/candles` (see API notes), via `useCandles`. Trade wall-clock times are converted to real instants with the account's timezone first (`tradeInstants` in `lib/trade-review-utils.ts`). Markers sit at the trade's actual prices (`atPrice*` positions) and carry **no text**, because entry and exit labels on the same candle overlapped. The prices are shown on the labeled Entry/Exit price lines and in the header ("Entry … → Exit …"). Autoscale keeps the price lines in view. The timeframe switcher (15m/30m/1h/4h) persists across trades.
 
 **Mismatch guard:** before drawing, `checkTradeAgainstCandles` checks that each leg's price traded around its time. That means the containing candle ±1 neighbor, with a `PRICE_TOLERANCE` of 0.1% for exact sources and 0.6% for `approximate` stand-ins (spot metals via futures, index CFDs via cash index). 0.5% was too loose: it let a gold trade read 8 hours off through. If a price never traded there, or there's no data near the time, the page shows a "doesn't match the market data" error listing what actually traded, instead of a misleading chart. For accounts still on a legacy fixed offset, the error also suggests setting Broker Timezone, since a wrong zone is the usual cause.
 
@@ -173,7 +173,7 @@ Requests with no `accountId` are resolved against the caller's default `trading_
 - `POST /api/plans` — `{ accountId?, planDate }`; snapshots the account's current rules into the plan.
 - `PATCH /api/plans/:id` — `planDate` (move to another day; only while `status` is `planned` — the board's drag-to-reschedule uses this), `symbol` (upper-cased), `direction`, `grade`, `status`, `journalTradeId` (must be a trade in the same account), `answers` (per-snapshot-index `{ done, value }`, choice values must be one of the rule's options). `status: "logged"` requires a grade. A skipped/logged plan accepts no edits except `status: "planned"` (Undo).
 - `DELETE /api/plans/:id`.
-- `GET /api/candles?symbol=&entry=&exit=&interval=auto|1m|5m|15m|1h|1d` returns OHLC candles around a trade for Trade Review.
+- `GET /api/candles?symbol=&entry=&exit=&interval=15m|30m|1h|4h` returns OHLC candles around a trade for Trade Review. The default is 15m, and the user chose this set of timeframes.
   - `entry` and `exit` are **real UTC ISO instants**; the client converts the wall clock first.
   - Auth is required so it isn't an open proxy.
   - The data source is Yahoo Finance's free, unofficial public chart endpoint, wrapped entirely in `apps/api/src/lib/market-data.ts`. That's the one file to replace when moving to a paid feed such as Databento.
@@ -184,7 +184,9 @@ Requests with no `accountId` are resolved against the caller's default `trading_
     - index CFDs → cash index;
     - crypto → `BTC-USD`;
     - stocks pass through.
-  - Yahoo's history limits drive `allowedIntervals`/`pickWindow`: 1m for about 7 days, 5m/15m for about 60 days, 1h for about 2 years, daily otherwise. "auto" picks the finest interval that keeps the window at or under about 400 candles.
+  - Yahoo's history limits drive `allowedIntervals`/`pickWindow`: 15m/30m for about 60 days, 1h for about 2 years.
+  - **4h isn't offered by Yahoo.** It's fetched as 1h and merged into UTC-aligned bars (`aggregateCandles`), so bars can be offset from TradingView's session-aligned 4h candles.
+  - If the requested interval's history doesn't reach the trade, the API falls back to the next coarser one and reports it in `interval`. Trades older than about 2 years get a 400.
   - Responses are cached in memory: windows that ended more than an hour ago for a day, live windows for 60 s.
   - Errors: 404 for an unsupported symbol, 400 for an interval that's invalid or out of range, 502 for an upstream failure.
 

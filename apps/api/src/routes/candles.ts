@@ -22,9 +22,9 @@ export async function candleRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "entry/exit must be ISO times with exit after entry" });
     }
 
-    const interval = (q.interval ?? "auto") as CandleInterval | "auto";
-    if (interval !== "auto" && !CANDLE_INTERVALS.includes(interval)) {
-      return reply.code(400).send({ error: `interval must be auto or one of ${CANDLE_INTERVALS.join(", ")}` });
+    const interval = (q.interval ?? "15m") as CandleInterval;
+    if (!CANDLE_INTERVALS.includes(interval)) {
+      return reply.code(400).send({ error: `interval must be one of ${CANDLE_INTERVALS.join(", ")}` });
     }
 
     const info = toYahooTicker(q.symbol);
@@ -33,8 +33,10 @@ export async function candleRoutes(app: FastifyInstance) {
     const clampedExit = Math.min(exitMs, now);
     const window = pickWindow(entryMs, clampedExit, now, interval);
     const allowed = allowedIntervals(entryMs, clampedExit, now);
+    // Falls back to a coarser interval when the requested one's history doesn't reach the trade;
+    // null only when the trade is older than any free intraday history (~2 years).
     if (!window) {
-      return reply.code(400).send({ error: `${interval} candles aren't available this far back — try ${allowed.join(", ")}` });
+      return reply.code(400).send({ error: "This trade is too old for the free chart data (intraday history goes back about 2 years)." });
     }
 
     try {

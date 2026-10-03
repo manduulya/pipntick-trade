@@ -48,13 +48,23 @@ describe("GET /api/candles", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("validates the interval and its history limit", async () => {
+  it("validates the interval and refuses trades older than any free history", async () => {
     const app = await buildApp();
-    const bad = await app.inject({ method: "GET", url: `/api/candles?symbol=MES&entry=${recentEntry()}&interval=3m` });
+    const bad = await app.inject({ method: "GET", url: `/api/candles?symbol=MES&entry=${recentEntry()}&interval=1m` });
     expect(bad.statusCode).toBe(400);
-    const old = new Date(Date.now() - 40 * 86_400_000).toISOString();
-    const tooFine = await app.inject({ method: "GET", url: `/api/candles?symbol=MES&entry=${old}&interval=1m` });
-    expect(tooFine.statusCode).toBe(400);
+    const ancient = new Date(Date.now() - 1000 * 86_400_000).toISOString();
+    const tooOld = await app.inject({ method: "GET", url: `/api/candles?symbol=MES&entry=${ancient}&interval=4h` });
+    expect(tooOld.statusCode).toBe(400);
+  });
+
+  it("falls back to a coarser interval for an older trade", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(yahooResponse()));
+    const app = await buildApp();
+    const yearOld = new Date(Date.now() - 400 * 86_400_000).toISOString();
+    const yearOldExit = new Date(Date.now() - 400 * 86_400_000 + 3_600_000).toISOString();
+    const res = await app.inject({ method: "GET", url: `/api/candles?symbol=MES&entry=${yearOld}&exit=${yearOldExit}&interval=15m` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ interval: "1h", allowedIntervals: ["1h", "4h"] });
   });
 
   it("fetches candles from the continuous contract for a micro future", async () => {
@@ -64,7 +74,7 @@ describe("GET /api/candles", () => {
     const res = await app.inject({ method: "GET", url: `/api/candles?symbol=MES&entry=${recentEntry()}&exit=${recentExit()}` });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body).toMatchObject({ symbol: "MES", ticker: "ES=F", interval: "1m", approximate: false });
+    expect(body).toMatchObject({ symbol: "MES", ticker: "ES=F", interval: "15m", approximate: false });
     expect(body.candles).toHaveLength(2);
     expect(fetchMock.mock.calls[0][0]).toContain("ES%3DF");
   });

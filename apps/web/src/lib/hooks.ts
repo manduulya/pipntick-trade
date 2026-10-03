@@ -244,7 +244,7 @@ export function useDeletePlan() {
 
 /** Candles around one trade. `entry`/`exit` are real UTC ISO instants (see tradeInstants). */
 export function useCandles(
-  params: { symbol: string; entry: string; exit?: string; interval: CandleInterval | "auto" } | null,
+  params: { symbol: string; entry: string; exit?: string; interval: CandleInterval } | null,
 ) {
   const { getToken } = useAuth();
   return useQuery({

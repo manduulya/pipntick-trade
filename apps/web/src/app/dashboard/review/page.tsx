@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { CandleInterval, Trade } from "@pipntick/shared";
 import { CANDLE_INTERVALS } from "@pipntick/shared";
@@ -35,7 +35,9 @@ function ReviewPageInner() {
   const { timeFormat } = useTimeFormat();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
-  const [interval, setChartInterval] = useState<CandleInterval | "auto">("auto");
+  // Kept when switching trades (like TradingView). The API may fall back to a coarser interval for
+  // older trades; the switcher highlights the interval actually shown.
+  const [interval, setChartInterval] = useState<CandleInterval>("15m");
 
   const list = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -53,8 +55,6 @@ function ReviewPageInner() {
   const requestedId = params.get("trade");
   const selected: Trade | null =
     (trades ?? []).find((t) => t.id === requestedId) ?? (trades && trades.length ? trades[0] : null);
-
-  useEffect(() => setChartInterval("auto"), [selected?.id]);
 
   function select(id: string) {
     router.replace(`/dashboard/review?trade=${id}`, { scroll: false });
@@ -208,15 +208,26 @@ function ReviewPageInner() {
                 <span className="text-xs font-bold" style={{ color: pnl === null ? "var(--color-text-muted)" : pnl >= 0 ? "var(--color-green-neon)" : "var(--color-danger)" }}>
                   {pnl === null ? "open" : `${pnl >= 0 ? "+" : "-"}$${Math.abs(pnl).toFixed(2)}`}
                 </span>
+                {/* Prices live here (and on the price-axis tags), not on the chart markers. */}
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold">
+                  <span style={{ color: "#22d3ee" }}>Entry {Number(selected.entryPrice)}</span>
+                  {selected.exitPrice !== null && (
+                    <>
+                      <span style={{ color: "var(--color-text-muted)" }}>→</span>
+                      <span style={{ color: "#f5a524" }}>Exit {Number(selected.exitPrice)}</span>
+                    </>
+                  )}
+                </span>
                 {candles.data && (
                   <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
                     {candles.data.ticker}{candles.data.approximate ? " (approx.)" : ""}
                   </span>
                 )}
                 <div className="ml-auto flex gap-0.5 p-0.5 rounded-md" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
-                  {(["auto", ...CANDLE_INTERVALS] as const).map((iv) => {
-                    const disabled = iv !== "auto" && !!allowed && !allowed.includes(iv);
-                    const on = interval === iv || (interval === "auto" && iv === "auto");
+                  {CANDLE_INTERVALS.map((iv) => {
+                    const disabled = !!allowed && !allowed.includes(iv);
+                    // Highlight what's actually shown (the API may have fallen back to a coarser one).
+                    const on = (candles.data?.interval ?? interval) === iv;
                     return (
                       <button
                         key={iv}
@@ -231,7 +242,7 @@ function ReviewPageInner() {
                           cursor: disabled ? "not-allowed" : "pointer",
                         }}
                       >
-                        {iv === "auto" && interval === "auto" && candles.data ? `Auto · ${candles.data.interval}` : iv === "auto" ? "Auto" : iv}
+                        {iv}
                       </button>
                     );
                   })}
