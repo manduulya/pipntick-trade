@@ -6,7 +6,6 @@ import {
   LineStyle,
   TickMarkType,
   createChart,
-  createSeriesMarkers,
   type IChartApi,
   type Time,
   type UTCTimestamp,
@@ -14,6 +13,7 @@ import {
 import type { Candle } from "@pipntick/shared";
 import { useTheme } from "../../../../lib/theme-context";
 import { formatChartTime, pricePrecision, type ChartMarker } from "../../../../lib/trade-review-utils";
+import { TradeMarkersPrimitive } from "./tradeMarkersPrimitive";
 
 // TradingView Lightweight Charts (Apache-2.0). The default TradingView attribution logo is left
 // on — the library's license asks for it.
@@ -98,7 +98,8 @@ export default function TradeChart({
     if (exitPrice !== null) {
       series.createPriceLine({ price: exitPrice, color: "#f5a524", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: "Exit" });
     }
-    createSeriesMarkers(series, markers.map((m) => ({ ...m, time: m.time as UTCTimestamp })));
+    // Custom-drawn, outlined entry/exit marks with labels (built-in markers can't be styled this way).
+    series.attachPrimitive(new TradeMarkersPrimitive(markers));
 
     // Open on the trade, not the whole fetched window (1h/1d windows span days). Clamped to the
     // data so a trade near either edge doesn't open on empty space.

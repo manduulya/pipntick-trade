@@ -5,6 +5,7 @@ import {
   chartTimeZone,
   checkTradeAgainstCandles,
   formatChartTime,
+  MARK_COLORS,
   pricePrecision,
   snapToCandle,
   tradeFocusRange,
@@ -40,21 +41,23 @@ describe("snapToCandle", () => {
 describe("buildTradeMarkers", () => {
   const instants = { entry: new Date(1350 * 1000), exit: new Date(1700 * 1000) };
 
-  it("marks a long entry below the bar and a losing exit in red", () => {
+  it("marks a buy entry with a green ▲ and a losing exit (the stop) with a red dot, labeled", () => {
     const markers = buildTradeMarkers({ direction: "long", pnl: "-131.25", entryPrice: "7761.75", exitPrice: "7756.5" }, instants, candles);
     expect(markers).toEqual([
-      { time: 1300, position: "atPriceBottom", price: 7761.75, shape: "arrowUp", color: "#7cc943" },
-      { time: 1600, position: "atPriceMiddle", price: 7756.5, shape: "circle", color: "#f05252" },
+      { time: 1300, price: 7761.75, shape: "arrowUp", ...MARK_COLORS.green, label: "Entry 7761.75" },
+      { time: 1600, price: 7756.5, shape: "circle", ...MARK_COLORS.red, label: "Exit 7756.5" },
     ]);
   });
 
-  it("marks a short entry above the bar and skips the exit for an open trade", () => {
-    const markers = buildTradeMarkers(
+  it("marks a sell entry with a red ▼, a winning exit green, and skips the exit for an open trade", () => {
+    const win = buildTradeMarkers({ direction: "short", pnl: "50", entryPrice: "100", exitPrice: "95" }, instants, candles);
+    expect(win.map((m) => [m.shape, m.fill])).toEqual([["arrowDown", MARK_COLORS.red.fill], ["circle", MARK_COLORS.green.fill]]);
+    const open = buildTradeMarkers(
       { direction: "short", pnl: null, entryPrice: "100", exitPrice: null },
       { entry: instants.entry, exit: null },
       candles,
     );
-    expect(markers).toEqual([{ time: 1300, position: "atPriceTop", price: 100, shape: "arrowDown", color: "#f05252" }]);
+    expect(open).toEqual([{ time: 1300, price: 100, shape: "arrowDown", ...MARK_COLORS.red, label: "Entry 100" }]);
   });
 });
 

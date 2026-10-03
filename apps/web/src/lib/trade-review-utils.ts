@@ -86,24 +86,29 @@ export function checkTradeAgainstCandles(
   return problems;
 }
 
+/** One entry/exit mark, drawn by the chart's custom marker primitive (tradeMarkersPrimitive.ts). */
 export type ChartMarker = {
   time: number;
-  /** Placed at the trade's actual price, not the candle's high/low. */
-  position: "atPriceBottom" | "atPriceTop" | "atPriceMiddle";
+  /** Drawn at the trade's actual price, not the candle's high/low. */
   price: number;
   shape: "arrowUp" | "arrowDown" | "circle";
-  color: string;
+  /** Light body + dark outline, for contrast against the candles. */
+  fill: string;
+  stroke: string;
+  label: string;
 };
 
-const GREEN = "#7cc943";
-const RED = "#f05252";
-const NEUTRAL = "#c9d1dc";
+// Light body / dark outline pairs (buy & winning exit green; sell & losing exit — the stop — red).
+export const MARK_COLORS = {
+  green: { fill: "#8ee08a", stroke: "#1b5e20" },
+  red: { fill: "#ff9e9e", stroke: "#8e1c1c" },
+  neutral: { fill: "#d8dee6", stroke: "#4a5568" },
+} as const;
 
 /**
- * Entry and exit markers, drawn at the trade's actual prices: a long enters with ▲ (pointing up at
- * the price from below), a short with ▼ from above; the exit is a circle colored by the trade's
- * outcome. No text on the markers — when entry and exit share a candle their labels overlapped
- * into an unreadable smear; the prices are on the labeled Entry/Exit price lines instead.
+ * Entry and exit marks at the trade's actual prices: a buy enters with a light-green ▲ (pointing
+ * up at the price from below), a sell with a light-red ▼ from above; the exit is a dot, green for
+ * a winner and red for a loss (the stop). Each carries a bold "Entry …"/"Exit …" label.
  * Points outside the loaded candles are skipped.
  */
 export function buildTradeMarkers(
@@ -117,10 +122,10 @@ export function buildTradeMarkers(
   if (entryTime !== null) {
     markers.push({
       time: entryTime,
-      position: long ? "atPriceBottom" : "atPriceTop",
       price: Number(trade.entryPrice),
       shape: long ? "arrowUp" : "arrowDown",
-      color: long ? GREEN : RED,
+      ...(long ? MARK_COLORS.green : MARK_COLORS.red),
+      label: `Entry ${Number(trade.entryPrice)}`,
     });
   }
   if (instants.exit && trade.exitPrice !== null) {
@@ -129,10 +134,10 @@ export function buildTradeMarkers(
       const pnl = trade.pnl !== null ? Number(trade.pnl) : null;
       markers.push({
         time: exitTime,
-        position: "atPriceMiddle",
         price: Number(trade.exitPrice),
         shape: "circle",
-        color: pnl === null ? NEUTRAL : pnl >= 0 ? GREEN : RED,
+        ...(pnl === null ? MARK_COLORS.neutral : pnl >= 0 ? MARK_COLORS.green : MARK_COLORS.red),
+        label: `Exit ${Number(trade.exitPrice)}`,
       });
     }
   }
