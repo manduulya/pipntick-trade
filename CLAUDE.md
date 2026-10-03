@@ -199,9 +199,9 @@ Shared route helper: `apps/api/src/lib/resolve-account.ts`'s `resolveAccountId` 
 - **Avg Reward:Risk** = avg win ÷ |avg loss|, shown as a plain ratio like `2.06`, or `—` without both wins and losses. Trades have no stop-loss field, so this is "realized" R:R.
 - **Cost of Mistakes** = the summed P&L of **losing** `isMistake` trades in the period (`mistakeCost`). A winning mistake doesn't offset it.
 
-The Performance **Cumulative P&L** chart replaced the old "Portfolio Growth" line, which plotted a per-day balance from a $0 axis and read as flat.
-- **Data:** `computeCumulativePnl` gives one point per closed trade in the period, running from $0.
-- **Drawing:** the Y axis fits the data, with a zero `ReferenceLine`. Line and fill are green above zero and red below, via a gradient split at the zero offset.
+The Performance **Account Balance** chart replaced the old "Portfolio Growth" line, which plotted a per-day balance from a $0 axis and read as flat.
+- **Data:** one point per closed trade in the period, plotting the **actual balance** after each trade. That's the period's opening balance (`balanceBefore`) plus the running P&L from `computeCumulativePnl`.
+- **Drawing:** the opening balance is a "Start" `ReferenceLine` **centered** on the Y axis (symmetric domain sized by the biggest move either way). Line and fill are green above it and red below, via a gradient split at that offset. The user wants the start balance, not $0, as the baseline.
 - **Header:** the period's net, max run-up and max drawdown, plus the balance at the period's start (`balanceBefore`) and end.
 - `computeCharts` still feeds the P&L Breakdown bars.
 

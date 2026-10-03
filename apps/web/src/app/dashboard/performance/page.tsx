@@ -57,7 +57,7 @@ function PnlTooltip({ active, payload, label }: { active?: boolean; payload?: { 
   );
 }
 
-function CumulativeTooltip({ active, payload }: { active?: boolean; payload?: { payload: CumulativePoint }[] }) {
+function CumulativeTooltip({ active, payload }: { active?: boolean; payload?: { payload: CumulativePoint & { balance: number } }[] }) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   const color = (v: number) => (v >= 0 ? "var(--color-green-primary)" : "var(--color-danger)");
@@ -66,16 +66,22 @@ function CumulativeTooltip({ active, payload }: { active?: boolean; payload?: { 
       <p style={{ color: "var(--color-text-primary)", marginBottom: 4 }}>
         {p.index === 0 ? "Period start" : `#${p.index} · ${p.symbol} · ${p.label}`}
       </p>
-      {p.index > 0 && (
-        <p>
-          <span style={{ color: "var(--color-text-muted)" }}>Trade: </span>
-          <span style={{ color: color(p.pnl) }}>{fmtPnl(p.pnl)}</span>
-        </p>
-      )}
       <p>
-        <span style={{ color: "var(--color-text-muted)" }}>Cumulative: </span>
-        <span style={{ color: color(p.cumulative) }}>{fmtPnl(p.cumulative)}</span>
+        <span style={{ color: "var(--color-text-muted)" }}>Balance: </span>
+        <span style={{ color: "var(--color-text-primary)" }}>${p.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
       </p>
+      {p.index > 0 && (
+        <>
+          <p>
+            <span style={{ color: "var(--color-text-muted)" }}>Trade: </span>
+            <span style={{ color: color(p.pnl) }}>{fmtPnl(p.pnl)}</span>
+          </p>
+          <p>
+            <span style={{ color: "var(--color-text-muted)" }}>vs start: </span>
+            <span style={{ color: color(p.cumulative) }}>{fmtPnl(p.cumulative)}</span>
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -137,10 +143,19 @@ export default function PerformancePage() {
     () => balanceBefore(allClosed, period, offset, startingBalance),
     [allClosed, period, offset, startingBalance],
   );
-  // Split the line/fill color at zero: green above, red below (gradient stop at the 0 line).
+  // Plot the actual account balance after each trade, starting from the period's opening balance.
+  const balancePoints = useMemo(
+    () => cum.points.map((p) => ({ ...p, balance: periodStartBalance + p.cumulative })),
+    [cum.points, periodStartBalance],
+  );
+  // The opening balance sits in the middle of the chart: a symmetric range around it, sized by the
+  // biggest move either way (with a small floor so a flat period isn't a hairline).
   const cumValues = cum.points.map((p) => p.cumulative);
   const cumMax = Math.max(...cumValues);
   const cumMin = Math.min(...cumValues);
+  const halfRange = Math.max(Math.abs(cumMax), Math.abs(cumMin), Math.abs(periodStartBalance) * 0.002, 1) * 1.15;
+  const balanceDomain: [number, number] = [periodStartBalance - halfRange, periodStartBalance + halfRange];
+  // Split the line/fill color at the opening balance: green above, red below.
   const zeroOffset = cumMax <= 0 ? 0 : cumMin >= 0 ? 1 : cumMax / (cumMax - cumMin);
 
   const totalDirPnl = dirs[0].pnl + dirs[1].pnl;
@@ -268,11 +283,12 @@ export default function PerformancePage() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {/* Cumulative P&L — one point per trade, from $0, green above / red below zero. */}
+        {/* Account balance through the period — one point per trade, starting from the opening
+            balance (centered), green above it / red below it. */}
         <div className="rounded-xl p-4" style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}>
           <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
             <div>
-              <h2 className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>Cumulative P&L</h2>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>Account Balance</h2>
               <p className="text-[11px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
                 Balance ${periodStartBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} → $
                 {(periodStartBalance + cum.net).toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -299,7 +315,7 @@ export default function PerformancePage() {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={cum.points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <AreaChart data={balancePoints} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="cumStroke" x1="0" y1="0" x2="0" y2="1">
                     <stop offset={zeroOffset} stopColor={chartColors.positive} />
@@ -318,17 +334,24 @@ export default function PerformancePage() {
                   tick={{ fill: chartColors.axisTick, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={fmtAxisDollar}
-                  width={44}
-                  // Fit the actual range (always including $0) instead of starting the axis at $0.
-                  domain={[(min: number) => Math.min(0, min) - Math.abs(min) * 0.08, (max: number) => Math.max(0, max) + Math.abs(max) * 0.08]}
+                  // Whole dollars: balance moves are small next to the balance itself, so "49.8k"-style
+                  // labels would repeat.
+                  tickFormatter={(v: number) => `$${Math.round(v).toLocaleString()}`}
+                  width={64}
+                  domain={balanceDomain}
+                  allowDataOverflow
                 />
-                <ReferenceLine y={0} stroke={chartColors.axisTick} strokeOpacity={0.6} />
+                <ReferenceLine
+                  y={periodStartBalance}
+                  stroke={chartColors.axisTick}
+                  strokeOpacity={0.6}
+                  label={{ value: "Start", position: "insideTopLeft", fill: chartColors.axisTick, fontSize: 10 }}
+                />
                 <Tooltip content={<CumulativeTooltip />} cursor={{ stroke: chartColors.gridStroke }} />
                 <Area
                   type="linear"
-                  dataKey="cumulative"
-                  baseValue={0}
+                  dataKey="balance"
+                  baseValue={periodStartBalance}
                   stroke="url(#cumStroke)"
                   strokeWidth={2}
                   fill="url(#cumFill)"
