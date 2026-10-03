@@ -74,6 +74,19 @@ export default function TradeChart({
       wickUpColor: "#7cc943",
       wickDownColor: "#f05252",
       priceFormat: { type: "price", precision, minMove: 1 / 10 ** precision },
+      // Keep the entry/exit price lines in view even if they sit just outside the candles' range.
+      autoscaleInfoProvider: (base: () => { priceRange: { minValue: number; maxValue: number } | null } | null) => {
+        const info = base();
+        if (!info?.priceRange) return info;
+        const prices = [entryPrice, ...(exitPrice !== null ? [exitPrice] : [])];
+        return {
+          ...info,
+          priceRange: {
+            minValue: Math.min(info.priceRange.minValue, ...prices),
+            maxValue: Math.max(info.priceRange.maxValue, ...prices),
+          },
+        };
+      },
     });
     series.setData(candles.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
 

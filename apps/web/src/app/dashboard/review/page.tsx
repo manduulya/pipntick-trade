@@ -10,7 +10,13 @@ import { ApiError } from "../../../lib/api";
 import { formatDuration } from "../../../lib/trade-utils";
 import { useTimeFormat } from "../../../lib/time-format-context";
 import { formatDateTime } from "../../../lib/time-format";
-import { buildTradeMarkers, chartTimeZone, tradeInstants } from "../../../lib/trade-review-utils";
+import {
+  buildTradeMarkers,
+  chartTimeZone,
+  checkTradeAgainstCandles,
+  formatChartTime,
+  tradeInstants,
+} from "../../../lib/trade-review-utils";
 import EmptyAccountsState from "../EmptyAccountsState";
 import MistakePill from "../_components/MistakePill";
 import TradeChart from "./_components/TradeChart";
@@ -65,6 +71,18 @@ function ReviewPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [candles.data, selected?.id, selectedAccount?.brokerTimezone, selectedAccount?.brokerUtcOffsetMinutes],
   );
+
+  // A trade whose prices never traded at its times (wrong price/time/timezone, or a test trade)
+  // gets an explanation instead of a misleading chart.
+  const problems = useMemo(
+    () =>
+      selected && instants && candles.data && candles.data.candles.length > 0
+        ? checkTradeAgainstCandles(selected, instants, candles.data.candles, candles.data.interval)
+        : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [candles.data, selected?.id, selectedAccount?.brokerTimezone, selectedAccount?.brokerUtcOffsetMinutes],
+  );
+  const zone = chartTimeZone(selectedAccount);
 
   if (!isLoading && !isError && accounts.length === 0) return <EmptyAccountsState />;
 
@@ -229,13 +247,44 @@ function ReviewPageInner() {
                     No price data for this period (the market may have been closed).
                   </div>
                 )}
-                {candles.data && candles.data.candles.length > 0 && (
+                {candles.data && candles.data.candles.length > 0 && problems.length > 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center p-6">
+                    <div
+                      role="alert"
+                      className="max-w-md w-full rounded-xl p-4 flex flex-col gap-2.5"
+                      style={{ backgroundColor: "rgba(224,82,82,0.06)", border: "1px solid rgba(224,82,82,0.35)" }}
+                    >
+                      <p className="text-sm font-bold" style={{ color: "var(--color-danger)" }}>
+                        This trade doesn&apos;t match the market data
+                      </p>
+                      <ul className="flex flex-col gap-1.5 text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                        {problems.map((p) => (
+                          <li key={p.leg}>
+                            <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                              {p.leg} {p.price}
+                            </span>{" "}
+                            at {formatChartTime(p.time, zone, true)}:{" "}
+                            {p.range
+                              ? `${candles.data!.ticker} only traded ${p.range.low}–${p.range.high} around then.`
+                              : "there's no market data at that time (the market may have been closed)."}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-[11px] leading-relaxed" style={{ color: "var(--color-text-muted)" }}>
+                        Check the trade&apos;s prices and times, and that the account&apos;s timezone matches your broker&apos;s
+                        clock. The chart uses {candles.data.ticker}
+                        {candles.data.note ? ` (${candles.data.note})` : ""}, so tiny differences are allowed, but not this much.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {candles.data && candles.data.candles.length > 0 && problems.length === 0 && (
                   <TradeChart
                     candles={candles.data.candles}
                     markers={markers}
                     entryPrice={Number(selected.entryPrice)}
                     exitPrice={selected.exitPrice !== null ? Number(selected.exitPrice) : null}
-                    timeZone={chartTimeZone(selectedAccount)}
+                    timeZone={zone}
                   />
                 )}
               </div>

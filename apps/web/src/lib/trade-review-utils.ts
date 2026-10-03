@@ -27,9 +27,66 @@ export function snapToCandle(candles: Candle[], seconds: number): number | null 
   return candles[lo].time;
 }
 
+// ─── Does the trade match the market? ─────────────────────────────────────
+
+const INTERVAL_SECONDS: Record<string, number> = { "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "1d": 86_400 };
+
+/**
+ * How far outside the traded range a price may sit and still count as matching: the chart uses
+ * the continuous front-month contract (the traded contract can differ by a few ticks to well
+ * under 1%), so allow 0.5% of the price.
+ */
+export const PRICE_TOLERANCE = 0.005;
+
+export type TradeCheckProblem = {
+  leg: "Entry" | "Exit";
+  price: number;
+  /** When the price should have traded (unix seconds). */
+  time: number;
+  /** What the market actually traded around then, or null when there's no data at that time. */
+  range: { low: number; high: number } | null;
+};
+
+/**
+ * Checks each leg's price against what actually traded around its time: the candle containing it
+ * plus one neighbor on each side (trade times are to the minute, candles can be coarser). A leg
+ * fails if there's no candle near its time (outside the data, or the market was closed) or its
+ * price is outside that range by more than PRICE_TOLERANCE. Empty result = the trade matches.
+ */
+export function checkTradeAgainstCandles(
+  trade: Pick<Trade, "entryPrice" | "exitPrice">,
+  instants: TradeInstants,
+  candles: Candle[],
+  interval: string,
+): TradeCheckProblem[] {
+  const step = INTERVAL_SECONDS[interval] ?? 60;
+  const legs: { leg: "Entry" | "Exit"; price: number; at: Date }[] = [{ leg: "Entry", price: Number(trade.entryPrice), at: instants.entry }];
+  if (instants.exit && trade.exitPrice !== null) legs.push({ leg: "Exit", price: Number(trade.exitPrice), at: instants.exit });
+
+  const problems: TradeCheckProblem[] = [];
+  for (const { leg, price, at } of legs) {
+    const t = Math.floor(at.getTime() / 1000);
+    const snapped = snapToCandle(candles, t);
+    // No candle containing the time, or the nearest one is stale (gap/market closed).
+    if (snapped === null || t - snapped >= 2 * step) {
+      problems.push({ leg, price, time: t, range: null });
+      continue;
+    }
+    const k = candles.findIndex((c) => c.time === snapped);
+    const near = candles.slice(Math.max(0, k - 1), k + 2);
+    const low = Math.min(...near.map((c) => c.low));
+    const high = Math.max(...near.map((c) => c.high));
+    const slack = price * PRICE_TOLERANCE;
+    if (price < low - slack || price > high + slack) problems.push({ leg, price, time: t, range: { low, high } });
+  }
+  return problems;
+}
+
 export type ChartMarker = {
   time: number;
-  position: "belowBar" | "aboveBar";
+  /** Placed at the trade's actual price, not the candle's high/low. */
+  position: "atPriceBottom" | "atPriceTop" | "atPriceMiddle";
+  price: number;
   shape: "arrowUp" | "arrowDown" | "circle";
   color: string;
   text: string;
@@ -40,8 +97,9 @@ const RED = "#f05252";
 const NEUTRAL = "#c9d1dc";
 
 /**
- * Entry and exit markers: a long enters with ▲ below the bar, a short with ▼ above; the exit is a
- * circle colored by the trade's outcome. Points outside the loaded candles are skipped.
+ * Entry and exit markers, drawn at the trade's actual prices: a long enters with ▲ (pointing up at
+ * the price from below), a short with ▼ from above; the exit is a circle colored by the trade's
+ * outcome. Points outside the loaded candles are skipped.
  */
 export function buildTradeMarkers(
   trade: Pick<Trade, "direction" | "pnl" | "entryPrice" | "exitPrice">,
@@ -54,7 +112,8 @@ export function buildTradeMarkers(
   if (entryTime !== null) {
     markers.push({
       time: entryTime,
-      position: long ? "belowBar" : "aboveBar",
+      position: long ? "atPriceBottom" : "atPriceTop",
+      price: Number(trade.entryPrice),
       shape: long ? "arrowUp" : "arrowDown",
       color: long ? GREEN : RED,
       text: `${long ? "Long" : "Short"} ${Number(trade.entryPrice)}`,
@@ -66,7 +125,8 @@ export function buildTradeMarkers(
       const pnl = trade.pnl !== null ? Number(trade.pnl) : null;
       markers.push({
         time: exitTime,
-        position: long ? "aboveBar" : "belowBar",
+        position: "atPriceMiddle",
+        price: Number(trade.exitPrice),
         shape: "circle",
         color: pnl === null ? NEUTRAL : pnl >= 0 ? GREEN : RED,
         text: `Exit ${Number(trade.exitPrice)}`,
