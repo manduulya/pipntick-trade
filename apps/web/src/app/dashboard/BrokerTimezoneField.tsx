@@ -1,64 +1,68 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { formatUtcOffsetLabel, timeZoneCity, timeZoneOffsetMinutes } from "../../lib/time-format";
 
-// Shared by AddAccountModal and AccountSettingsModal. Was previously a bare `type="number"`
-// input asking users to know their broker's raw UTC offset off the top of their head — most
-// people know their broker's city/region, not "+2" vs "+3", so this lists offsets annotated
-// with the city/region that commonly runs at each one (forex broker servers cluster heavily
-// around Cyprus/EET, New York, and London). The underlying value stored is still just the UTC
-// offset in hours (string, e.g. "2", "-5", "5.5") — same shape the account API already expects
-// — this only changes how the user picks it.
+// Shared by AddAccountModal and AccountSettingsModal. Picks the broker platform's clock as an
+// IANA timezone (e.g. "America/New_York") rather than a fixed UTC offset, so daylight saving is
+// handled automatically — a fixed "UTC−5" silently became wrong every March for New York brokers.
+// Legacy accounts that only have a fixed offset show it as the current value until a zone is picked.
 //
-// Same trigger+animated-panel dropdown as DateTimeFormatSelect.tsx (itself mirroring
-// AccountSwitcher.tsx's dropdown) rather than a native <select>, so it matches the rest of the
-// app's dropdown look instead of the browser's own unstyled list/scrollbar.
+// Same trigger+animated-panel dropdown as DateTimeFormatSelect.tsx / AccountSwitcher.tsx rather
+// than a native <select>, so it matches the rest of the app.
 
-// Well-known broker/financial-hub locations, keyed by offset (hours from UTC). Only offsets
-// with a common trading-relevant location get an annotation; every other half-hour offset in
-// the -12..+14 range still gets a plain "UTC±H:MM" option so the full range stays selectable.
-const KNOWN_LOCATIONS: Record<string, string> = {
-  "-8": "Los Angeles",
-  "-5": "New York (EST)",
-  "-4": "New York (EDT) / Toronto",
-  "0": "London (GMT)",
-  "1": "London (BST) / Frankfurt (CET)",
-  "2": "Cyprus / Athens (EET) — common MT4/5 broker default",
-  "3": "Moscow / Cyprus (EEST, summer)",
-  "4": "Dubai",
-  "5.5": "Mumbai",
-  "8": "Singapore / Hong Kong",
-  "9": "Tokyo",
-  "10": "Sydney (AEST)",
-};
+// Common broker / trading-hub clocks, listed first. Anything else is reachable via search.
+const COMMON_ZONES: { zone: string; note: string }[] = [
+  { zone: "America/New_York", note: "New York (ET) — CME futures, US brokers" },
+  { zone: "America/Chicago", note: "Chicago (CT)" },
+  { zone: "America/Los_Angeles", note: "Los Angeles (PT)" },
+  { zone: "Europe/London", note: "London" },
+  { zone: "Europe/Berlin", note: "Frankfurt (CET)" },
+  { zone: "Europe/Athens", note: "Athens / Cyprus (EET) — common MT4/5 server time" },
+  { zone: "Europe/Moscow", note: "Moscow" },
+  { zone: "Asia/Dubai", note: "Dubai" },
+  { zone: "Asia/Kolkata", note: "Mumbai" },
+  { zone: "Asia/Singapore", note: "Singapore" },
+  { zone: "Asia/Hong_Kong", note: "Hong Kong" },
+  { zone: "Asia/Tokyo", note: "Tokyo" },
+  { zone: "Asia/Ulaanbaatar", note: "Ulaanbaatar" },
+  { zone: "Australia/Sydney", note: "Sydney" },
+  { zone: "UTC", note: "UTC (no daylight saving)" },
+];
 
-function formatOffset(offset: number): string {
-  const sign = offset >= 0 ? "+" : "−";
-  const abs = Math.abs(offset);
-  const hours = Math.floor(abs);
-  const minutes = Math.round((abs - hours) * 60);
-  return `UTC${sign}${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+function allZones(): string[] {
+  try {
+    return (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.("timeZone") ?? [];
+  } catch {
+    return [];
+  }
 }
 
-const OFFSET_OPTIONS: { value: string; offsetLabel: string; location: string | null }[] = [];
-for (let offset = -12; offset <= 14; offset += 0.5) {
-  OFFSET_OPTIONS.push({
-    value: String(offset),
-    offsetLabel: formatOffset(offset),
-    location: KNOWN_LOCATIONS[String(offset)] ?? null,
-  });
+/** "UTC−4" for the zone right now. */
+function currentOffsetLabel(zone: string): string {
+  try {
+    return formatUtcOffsetLabel(timeZoneOffsetMinutes(new Date(), zone));
+  } catch {
+    return "";
+  }
 }
 
 export default function BrokerTimezoneField({
   value,
+  legacyOffsetMinutes = null,
   onChange,
 }: {
+  /** IANA zone, or "" for not set. */
   value: string;
-  onChange: (value: string) => void;
+  /** The account's old fixed offset, shown when no zone has been picked yet. */
+  legacyOffsetMinutes?: number | null;
+  onChange: (zone: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -68,8 +72,7 @@ export default function BrokerTimezoneField({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  // Escape closes the dropdown and returns focus to the trigger — keyboard users otherwise have
-  // no way to dismiss it short of tabbing all the way through every option.
+  // Escape closes the dropdown and returns focus to the trigger.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -81,11 +84,63 @@ export default function BrokerTimezoneField({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open]);
 
-  const selected = OFFSET_OPTIONS.find((o) => o.value === value) ?? null;
+  useEffect(() => {
+    if (open) requestAnimationFrame(() => searchRef.current?.focus());
+    else setQuery("");
+  }, [open]);
+
+  const options = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return COMMON_ZONES;
+    const common = COMMON_ZONES.filter((z) => z.zone.toLowerCase().includes(q) || z.note.toLowerCase().includes(q));
+    const others = allZones()
+      .filter((z) => z.toLowerCase().replace(/_/g, " ").includes(q) && !common.some((c) => c.zone === z))
+      .slice(0, 40)
+      .map((zone) => ({ zone, note: zone.replace(/_/g, " ") }));
+    return [...common, ...others];
+  }, [query]);
+
+  const selectedNote = COMMON_ZONES.find((z) => z.zone === value)?.note ?? (value ? value.replace(/_/g, " ") : null);
+
+  function pick(zone: string) {
+    onChange(zone);
+    setOpen(false);
+  }
+
+  function optionRow(zone: string, note: string, active: boolean) {
+    return (
+      <button
+        key={zone || "__none"}
+        type="button"
+        onClick={() => pick(zone)}
+        aria-current={active ? "true" : undefined}
+        className="focus-ring press-scale flex items-center justify-between gap-3 w-full px-3 py-2.5 text-left"
+        style={{ backgroundColor: active ? "rgba(123,193,59,0.08)" : "transparent" }}
+        onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
+        onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = "transparent"; }}
+      >
+        <div className="flex flex-col min-w-0">
+          <span className="text-xs font-semibold truncate" style={{ color: active ? "var(--color-green-primary)" : "var(--color-text-primary)" }}>
+            {zone ? note : "Not set / unsure"}
+          </span>
+          {zone && (
+            <span className="text-[10px] truncate" style={{ color: "var(--color-text-muted)" }}>
+              {zone} · now {currentOffsetLabel(zone)}
+            </span>
+          )}
+        </div>
+        {active && (
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ color: "var(--color-green-primary)", flexShrink: 0 }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </button>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Broker Server Timezone (optional)</label>
+      <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Broker Timezone (optional)</label>
       <div className="relative" ref={rootRef}>
         <button
           ref={triggerRef}
@@ -97,12 +152,17 @@ export default function BrokerTimezoneField({
           style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}
         >
           <div className="flex flex-col min-w-0 flex-1">
-            {selected ? (
+            {value ? (
               <>
-                <span className="text-xs font-semibold truncate" style={{ color: "var(--color-text-primary)" }}>{selected.offsetLabel}</span>
-                {selected.location && (
-                  <span className="text-[10px] truncate" style={{ color: "var(--color-text-muted)" }}>{selected.location}</span>
-                )}
+                <span className="text-xs font-semibold truncate" style={{ color: "var(--color-text-primary)" }}>{selectedNote ?? timeZoneCity(value)}</span>
+                <span className="text-[10px] truncate" style={{ color: "var(--color-text-muted)" }}>{value} · now {currentOffsetLabel(value)}</span>
+              </>
+            ) : legacyOffsetMinutes ? (
+              <>
+                <span className="text-xs font-semibold truncate" style={{ color: "var(--color-text-primary)" }}>
+                  Fixed {formatUtcOffsetLabel(legacyOffsetMinutes)} (no daylight saving)
+                </span>
+                <span className="text-[10px] truncate" style={{ color: "#f5a524" }}>Pick your broker&apos;s timezone so summer/winter time is handled</span>
               </>
             ) : (
               <span className="text-xs font-semibold truncate" style={{ color: "var(--color-text-primary)" }}>Not set / unsure</span>
@@ -116,16 +176,12 @@ export default function BrokerTimezoneField({
           </svg>
         </button>
 
-        {/* Always mounted so both open and close can transition instead of snapping — same
-            "unrolling out of the trigger" scale+translate as AccountSwitcher's/DateTimeFormatSelect's
-            dropdowns. Internally scrollable (rather than a native <select> list) since the offset
-            range spans -12..+14 in half-hour steps. */}
+        {/* Always mounted so open and close can both transition. */}
         <div
-          className="thin-scrollbar absolute left-0 right-0 mt-1 rounded-lg overflow-y-auto z-20"
+          className="absolute left-0 right-0 mt-1 rounded-lg overflow-hidden z-20 flex flex-col"
           style={{
             backgroundColor: "var(--color-bg-surface)",
             border: "1px solid var(--color-border)",
-            maxHeight: 260,
             transformOrigin: "top center",
             transform: open ? "scaleY(1) translateY(0)" : "scaleY(0.85) translateY(-8px)",
             opacity: open ? 1 : 0,
@@ -136,57 +192,29 @@ export default function BrokerTimezoneField({
               : "transform 0.15s ease, opacity 0.15s ease, visibility 0s linear 0.15s",
           }}
         >
-          <button
-            type="button"
-            onClick={() => { onChange(""); setOpen(false); }}
-            aria-current={value === "" ? "true" : undefined}
-            className="focus-ring press-scale flex items-center justify-between gap-3 w-full px-3 py-2.5 text-left"
-            style={{ backgroundColor: value === "" ? "rgba(123,193,59,0.08)" : "transparent" }}
-            onMouseEnter={(e) => { if (value !== "") e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
-            onMouseLeave={(e) => { if (value !== "") e.currentTarget.style.backgroundColor = "transparent"; }}
-          >
-            <span className="text-xs font-semibold truncate" style={{ color: value === "" ? "var(--color-green-primary)" : "var(--color-text-primary)" }}>
-              Not set / unsure
-            </span>
-            {value === "" && (
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ color: "var(--color-green-primary)", flexShrink: 0 }}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+          <div className="p-2" style={{ borderBottom: "1px solid var(--color-border)" }}>
+            <input
+              ref={searchRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search a city or timezone…"
+              aria-label="Search timezones"
+              className="focus-ring w-full text-xs rounded-md px-2.5 py-1.5"
+              style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)", outline: "none" }}
+            />
+          </div>
+          <div className="thin-scrollbar overflow-y-auto" style={{ maxHeight: 240 }}>
+            {!query && optionRow("", "", value === "")}
+            {options.map((o) => optionRow(o.zone, o.note, o.zone === value))}
+            {options.length === 0 && (
+              <p className="text-[11px] px-3 py-3" style={{ color: "var(--color-text-muted)" }}>No timezone matches &ldquo;{query}&rdquo;.</p>
             )}
-          </button>
-          {OFFSET_OPTIONS.map((opt) => {
-            const active = opt.value === value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => { onChange(opt.value); setOpen(false); }}
-                aria-current={active ? "true" : undefined}
-                className="focus-ring press-scale flex items-center justify-between gap-3 w-full px-3 py-2.5 text-left"
-                style={{ backgroundColor: active ? "rgba(123,193,59,0.08)" : "transparent" }}
-                onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
-                onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = "transparent"; }}
-              >
-                <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-semibold truncate" style={{ color: active ? "var(--color-green-primary)" : "var(--color-text-primary)" }}>
-                    {opt.offsetLabel}
-                  </span>
-                  {opt.location && (
-                    <span className="text-[10px] truncate" style={{ color: "var(--color-text-muted)" }}>{opt.location}</span>
-                  )}
-                </div>
-                {active && (
-                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ color: "var(--color-green-primary)", flexShrink: 0 }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </button>
-            );
-          })}
+          </div>
         </div>
       </div>
       <p className="text-[10px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-        Pick your platform&apos;s server time zone (e.g. in MT4/5, right-click Market Watch → check server time). Trade date/time fields then read as this zone, and it&apos;s used to work out the trading session — leave as &quot;Not set&quot; to enter times in UTC.
+        The timezone your platform shows trade times in (MT4/5: check the server time in Market Watch; CME futures platforms usually use New York or Chicago). Daylight saving is handled automatically. Leave as &quot;Not set&quot; to enter times in UTC.
       </p>
     </div>
   );

@@ -13,7 +13,19 @@ type CreateAccountBody = {
   startingBalance?: number;
   createdAt?: string;
   brokerUtcOffsetMinutes?: number | null;
+  brokerTimezone?: string | null;
 };
+
+/** True for a timezone name this runtime's Intl knows (IANA, e.g. "America/New_York"). */
+export function isValidTimeZone(tz: unknown): tz is string {
+  if (typeof tz !== "string" || !tz) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 type UpdateAccountBody = Partial<CreateAccountBody> & { status?: AccountStatus; isDefault?: unknown };
 
@@ -66,6 +78,9 @@ export async function accountRoutes(app: FastifyInstance) {
       if (parsed.getTime() > Date.now()) return reply.code(400).send({ error: "createdAt cannot be in the future" });
       createdAt = parsed;
     }
+    if (body.brokerTimezone != null && !isValidTimeZone(body.brokerTimezone)) {
+      return reply.code(400).send({ error: "brokerTimezone must be a valid IANA timezone, e.g. America/New_York" });
+    }
 
     await ensureUser(userId);
 
@@ -86,6 +101,7 @@ export async function accountRoutes(app: FastifyInstance) {
         startingBalance: body.startingBalance !== undefined ? String(body.startingBalance) : "0",
         isDefault: !currentDefault,
         brokerUtcOffsetMinutes: body.brokerUtcOffsetMinutes ?? null,
+        brokerTimezone: body.brokerTimezone ?? null,
         ...(createdAt !== undefined ? { createdAt } : {}),
       })
       .returning();
@@ -121,7 +137,12 @@ export async function accountRoutes(app: FastifyInstance) {
 
     // Archived accounts are read-only: the only accepted change is reactivating them (optionally
     // with other edits in the same request).
-    const detailEdits = [body.name, body.broker, body.currency, body.startingBalance, body.createdAt, body.brokerUtcOffsetMinutes];
+    if (body.brokerTimezone != null && !isValidTimeZone(body.brokerTimezone)) {
+      return reply.code(400).send({ error: "brokerTimezone must be a valid IANA timezone, e.g. America/New_York" });
+    }
+    const detailEdits = [
+      body.name, body.broker, body.currency, body.startingBalance, body.createdAt, body.brokerUtcOffsetMinutes, body.brokerTimezone,
+    ];
     if (existing.status === "archived" && status === "archived" && detailEdits.some((v) => v !== undefined)) {
       return reply.code(409).send({ error: "This account is archived — reactivate it to make changes" });
     }
@@ -178,6 +199,7 @@ export async function accountRoutes(app: FastifyInstance) {
           startingBalance: body.startingBalance !== undefined ? String(body.startingBalance) : existing.startingBalance,
           brokerUtcOffsetMinutes:
             body.brokerUtcOffsetMinutes !== undefined ? body.brokerUtcOffsetMinutes : existing.brokerUtcOffsetMinutes,
+          brokerTimezone: body.brokerTimezone !== undefined ? body.brokerTimezone : existing.brokerTimezone,
           createdAt,
           status,
           isDefault,

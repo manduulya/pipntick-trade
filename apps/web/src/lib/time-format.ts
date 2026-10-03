@@ -70,6 +70,76 @@ export function brokerWallClockToUtc(value: string, offsetMinutes: number): Date
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
+// ─── IANA timezones (daylight-saving aware) ───────────────────────────────
+// Accounts can carry an IANA zone (`brokerTimezone`, e.g. "America/New_York"). Unlike the legacy
+// fixed offset it follows daylight saving, so a September New York trade reads as UTC−4 and a
+// December one as UTC−5. Pure Intl, no date library.
+
+/** The zone's UTC offset in minutes at a given instant, e.g. America/New_York in July -> -240. */
+export function timeZoneOffsetMinutes(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(instant);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return Math.round((asUtc - Math.floor(instant.getTime() / 1000) * 1000) / 60_000);
+}
+
+/**
+ * A wall-clock "YYYY-MM-DDTHH:mm" in an IANA zone -> the real instant. Two passes so times near a
+ * daylight-saving switch use the offset in force at the result. An ambiguous fall-back time
+ * resolves to its first occurrence; a non-existent spring-forward time shifts by the gap.
+ */
+export function zonedWallClockToUtc(value: string, timeZone: string): Date {
+  const wall = new Date(`${value}:00Z`).getTime();
+  const first = timeZoneOffsetMinutes(new Date(wall), timeZone);
+  let instant = wall - first * 60_000;
+  const second = timeZoneOffsetMinutes(new Date(instant), timeZone);
+  if (second !== first) instant = wall - second * 60_000;
+  return new Date(instant);
+}
+
+/** The account fields that decide how its trade wall-clock times map to real time. */
+export type AccountClock = { brokerTimezone?: string | null; brokerUtcOffsetMinutes?: number | null } | null | undefined;
+
+/** Broker wall-clock -> real instant for an account: its IANA zone if set, else the legacy fixed
+ * offset (0/unset = plain UTC). Use this, not brokerWallClockToUtc, for anything account-aware. */
+export function accountWallClockToUtc(value: string, account: AccountClock): Date {
+  return account?.brokerTimezone
+    ? zonedWallClockToUtc(value, account.brokerTimezone)
+    : brokerWallClockToUtc(value, account?.brokerUtcOffsetMinutes ?? 0);
+}
+
+/** Inverse: a real instant -> the account's broker wall-clock "YYYY-MM-DDTHH:mm". */
+export function utcToAccountWallClock(instant: Date, account: AccountClock): string {
+  const offset = account?.brokerTimezone
+    ? timeZoneOffsetMinutes(instant, account.brokerTimezone)
+    : account?.brokerUtcOffsetMinutes ?? 0;
+  const shifted = new Date(instant.getTime() + offset * 60_000);
+  return Number.isNaN(shifted.getTime()) ? "" : shifted.toISOString().slice(0, 16);
+}
+
+/** "America/New_York" -> "New York". */
+export function timeZoneCity(timeZone: string): string {
+  return (timeZone.split("/").pop() ?? timeZone).replace(/_/g, " ");
+}
+
+/** Label for the trade form's date fields, e.g. "New York, UTC−4" — the offset in force at
+ * `atValue` (a wall-clock being entered) or now — or the legacy "UTC−5" for fixed-offset accounts. */
+export function accountZoneLabel(account: AccountClock, atValue?: string): string {
+  if (!account?.brokerTimezone) return formatUtcOffsetLabel(account?.brokerUtcOffsetMinutes ?? 0);
+  const at = atValue ? zonedWallClockToUtc(atValue, account.brokerTimezone) : new Date();
+  const instant = Number.isNaN(at.getTime()) ? new Date() : at;
+  return `${timeZoneCity(account.brokerTimezone)}, ${formatUtcOffsetLabel(timeZoneOffsetMinutes(instant, account.brokerTimezone))}`;
+}
+
 function formatDatePart(y: number, mo: number, d: number, format: DateTimeFormat): string {
   switch (format) {
     case "us-24h":

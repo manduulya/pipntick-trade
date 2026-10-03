@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  accountWallClockToUtc,
+  accountZoneLabel,
   brokerWallClockToUtc,
+  timeZoneOffsetMinutes,
+  utcToAccountWallClock,
+  zonedWallClockToUtc,
   formatDate,
   formatDateTime,
   formatUtcOffsetLabel,
@@ -9,6 +14,49 @@ import {
   to24Hour,
   usesTwelveHour,
 } from "../../lib/time-format";
+
+describe("IANA timezones (daylight saving)", () => {
+  it("knows New York's summer and winter offsets", () => {
+    expect(timeZoneOffsetMinutes(new Date("2026-09-28T15:00:00Z"), "America/New_York")).toBe(-240);
+    expect(timeZoneOffsetMinutes(new Date("2026-12-10T15:00:00Z"), "America/New_York")).toBe(-300);
+  });
+
+  it("converts a New York wall-clock to UTC in both seasons", () => {
+    // The MES exit that the fixed UTC−5 offset wrongly flagged as "in the future".
+    expect(zonedWallClockToUtc("2026-09-28T10:38", "America/New_York").toISOString()).toBe("2026-09-28T14:38:00.000Z");
+    expect(zonedWallClockToUtc("2026-12-10T10:38", "America/New_York").toISOString()).toBe("2026-12-10T15:38:00.000Z");
+  });
+
+  it("handles the daylight-saving edges", () => {
+    // Fall back (Nov 1 2026, 01:30 happens twice) -> first occurrence, still EDT.
+    expect(zonedWallClockToUtc("2026-11-01T01:30", "America/New_York").toISOString()).toBe("2026-11-01T05:30:00.000Z");
+    // Spring forward (Mar 8 2026, 02:30 doesn't exist) -> lands on a real instant in the gap's neighborhood.
+    const gap = zonedWallClockToUtc("2026-03-08T02:30", "America/New_York").toISOString();
+    expect(["2026-03-08T06:30:00.000Z", "2026-03-08T07:30:00.000Z"]).toContain(gap);
+    expect(zonedWallClockToUtc("2026-07-01T12:00", "UTC").toISOString()).toBe("2026-07-01T12:00:00.000Z");
+  });
+
+  it("uses the account's timezone, falling back to the legacy fixed offset", () => {
+    expect(accountWallClockToUtc("2026-09-28T10:38", { brokerTimezone: "America/New_York", brokerUtcOffsetMinutes: -300 }).toISOString())
+      .toBe("2026-09-28T14:38:00.000Z");
+    expect(accountWallClockToUtc("2026-09-28T10:38", { brokerTimezone: null, brokerUtcOffsetMinutes: -300 }).toISOString())
+      .toBe("2026-09-28T15:38:00.000Z");
+    expect(accountWallClockToUtc("2026-09-28T10:38", null).toISOString()).toBe("2026-09-28T10:38:00.000Z");
+  });
+
+  it("round-trips an instant back to the account's wall clock", () => {
+    const ny = { brokerTimezone: "America/New_York" };
+    expect(utcToAccountWallClock(new Date("2026-09-28T14:38:00Z"), ny)).toBe("2026-09-28T10:38");
+    expect(utcToAccountWallClock(new Date("2026-09-28T14:38:00Z"), { brokerUtcOffsetMinutes: 120 })).toBe("2026-09-28T16:38");
+  });
+
+  it("labels the form fields with the offset for the date being entered", () => {
+    const ny = { brokerTimezone: "America/New_York" };
+    expect(accountZoneLabel(ny, "2026-09-28T10:38")).toBe("New York, UTC−4");
+    expect(accountZoneLabel(ny, "2026-12-10T10:38")).toBe("New York, UTC−5");
+    expect(accountZoneLabel({ brokerUtcOffsetMinutes: -300 })).toBe("UTC−5");
+  });
+});
 
 describe("resolveInitialTimeFormat", () => {
   it("defaults to us-24h when nothing is stored", () => {

@@ -21,6 +21,9 @@ export interface TradingAccount {
   /** Broker platform's server timezone as an offset from UTC in minutes (e.g. 180 for UTC+3).
    * Null = unset, meaning screenshot-imported times are treated as literal UTC (legacy behavior). */
   brokerUtcOffsetMinutes: number | null;
+  /** IANA timezone of the broker clock (e.g. "America/New_York"); follows daylight saving.
+   * Takes precedence over brokerUtcOffsetMinutes, which is only the legacy fallback. */
+  brokerTimezone: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -142,6 +145,8 @@ export interface CreateAccountInput {
   /** Broker platform's server timezone as an offset from UTC in minutes (e.g. 180 for UTC+3).
    * Omit/undefined leaves it unchanged (update) or unset (create); pass null to explicitly clear it. */
   brokerUtcOffsetMinutes?: number | null;
+  /** IANA timezone (e.g. "America/New_York"). Same absent/null/value rule as the offset. */
+  brokerTimezone?: string | null;
 }
 
 export type UpdateAccountInput = Partial<CreateAccountInput> & {

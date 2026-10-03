@@ -6,7 +6,7 @@ import { getContractSize, getFuturesContract } from "@pipntick/shared";
 import { useCreateTrade, useUpdateTrade } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
 import { ApiError } from "../../../lib/api";
-import { brokerWallClockToUtc, formatUtcOffsetLabel } from "../../../lib/time-format";
+import { accountWallClockToUtc, accountZoneLabel, utcToAccountWallClock } from "../../../lib/time-format";
 import { detectSession, toDatetimeLocal } from "../../../lib/trade-utils";
 import InstrumentInput from "../InstrumentInput";
 import { findInstrument, loadStockInstruments } from "../../../lib/instruments";
@@ -85,20 +85,15 @@ export function TradeForm({
   const { selectedAccount, readOnly } = useSelectedAccount();
   // Trade times are entered, displayed, stored and day-bucketed in the account's broker-server
   // timezone (what the user sees on their platform / screenshots) — the raw wall-clock digits,
-  // never converted, same as lib/trade-utils.ts documents. This offset is only used to shift back
+  // never converted, same as lib/trade-utils.ts documents. The account's timezone (IANA zone,
+  // daylight-saving aware; legacy accounts fall back to a fixed offset) is only used to map back
   // to a real instant for the three things that actually reason in real time: the "not in the
-  // future" and account-start checks, and the London/NY/Tokyo session lookup. 0 (or unset) keeps
-  // the fields as plain UTC.
-  const offsetMinutes = selectedAccount?.brokerUtcOffsetMinutes ?? 0;
-  const tzLabel = formatUtcOffsetLabel(offsetMinutes);
+  // future" and account-start checks, and the London/NY/Tokyo session lookup. Unset = plain UTC.
   // Bounds for entry/exit: can't predate the account's own start date, can't be in the future.
   // Both the input's native min/max (best-effort, browser-dependent) and an explicit submit-time
   // check below, since not every browser enforces datetime-local min/max in its picker UI. Both
-  // bounds are real instants shifted into broker wall-clock to match the field's own scale.
-  const toBrokerWallClock = (instant: Date) => {
-    const shifted = new Date(instant.getTime() + offsetMinutes * 60_000);
-    return Number.isNaN(shifted.getTime()) ? "" : toDatetimeLocal(shifted.toISOString());
-  };
+  // bounds are real instants converted into broker wall-clock to match the field's own scale.
+  const toBrokerWallClock = (instant: Date) => utcToAccountWallClock(instant, selectedAccount);
   const minDateTime = selectedAccount ? toBrokerWallClock(new Date(selectedAccount.createdAt)) || undefined : undefined;
   // Slow tick so the "now" upper bound doesn't go stale while the form sits open — a form opened
   // at 23:58 would otherwise keep greying out "tomorrow" for the rest of the session even after
@@ -152,7 +147,11 @@ export function TradeForm({
   // Session boundaries (London/NY/Tokyo) are defined in UTC hours, so match against the UTC time,
   // not the raw broker wall-clock the field holds. Guard the ISO call against a not-yet-complete
   // field value so a half-typed date can't throw on render.
-  const entryInstant = entryDateTime ? brokerWallClockToUtc(entryDateTime, offsetMinutes) : null;
+  const entryInstant = entryDateTime ? accountWallClockToUtc(entryDateTime, selectedAccount) : null;
+  // Field labels carry the offset in force on the date being entered ("New York, UTC−4" in
+  // September, UTC−5 in December), so they always match what's checked.
+  const entryTzLabel = accountZoneLabel(selectedAccount, entryDateTime || undefined);
+  const exitTzLabel = accountZoneLabel(selectedAccount, exitDateTime || entryDateTime || undefined);
   const session =
     entryInstant && !Number.isNaN(entryInstant.getTime())
       ? detectSession(entryInstant.toISOString().slice(11, 16))
@@ -169,7 +168,7 @@ export function TradeForm({
   // account start / now. Returns an error message, or null if in range (or absent).
   function validateDate(value: string): string | null {
     if (!value) return null;
-    const instant = brokerWallClockToUtc(value, offsetMinutes);
+    const instant = accountWallClockToUtc(value, selectedAccount);
     if (selectedAccount && instant < new Date(selectedAccount.createdAt)) {
       return "Can't be before the account's start date";
     }
@@ -335,8 +334,8 @@ export function TradeForm({
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Price</label><input type="number" step="any" placeholder="0.00" value={exitPrice} onChange={(e) => { setExitPrice(e.target.value); clearMissing("Exit Price"); }} style={missingFields.includes("Exit Price") ? missingInputStyle : inputStyle} /></div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Date & Time ({tzLabel})</label><DateTimePicker tzLabel={tzLabel} min={minDateTime} max={maxDateTime} value={entryDateTime} onChange={(v) => { setEntryDateTime(v); clearMissing("Entry Date & Time"); setDateError(null); }} style={missingFields.includes("Entry Date & Time") || dateError?.field === "Entry Date & Time" ? missingInputStyle : inputStyle} /></div>
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Date & Time ({tzLabel})</label><DateTimePicker tzLabel={tzLabel} min={entryDateTime || minDateTime} max={maxDateTime} value={exitDateTime} onChange={(v) => { setExitDateTime(v); setDateError(null); }} style={dateError?.field === "Exit Date & Time" ? missingInputStyle : inputStyle} /></div>
+        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Date & Time ({entryTzLabel})</label><DateTimePicker tzLabel={entryTzLabel} min={minDateTime} max={maxDateTime} value={entryDateTime} onChange={(v) => { setEntryDateTime(v); clearMissing("Entry Date & Time"); setDateError(null); }} style={missingFields.includes("Entry Date & Time") || dateError?.field === "Entry Date & Time" ? missingInputStyle : inputStyle} /></div>
+        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Date & Time ({exitTzLabel})</label><DateTimePicker tzLabel={exitTzLabel} min={entryDateTime || minDateTime} max={maxDateTime} value={exitDateTime} onChange={(v) => { setExitDateTime(v); setDateError(null); }} style={dateError?.field === "Exit Date & Time" ? missingInputStyle : inputStyle} /></div>
       </div>
       <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
         <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Session</span>
