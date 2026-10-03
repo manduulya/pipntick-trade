@@ -276,6 +276,33 @@ export function isRuleMet(item: Pick<RuleSnapshotItem, "type" | "done" | "value"
   return item.type === "choice" ? !!item.value : item.done;
 }
 
+// ─── Trade Review chart ────────────────────────────────────────────────────
+
+export type CandleInterval = "1m" | "5m" | "15m" | "1h" | "1d";
+export const CANDLE_INTERVALS: readonly CandleInterval[] = ["1m", "5m", "15m", "1h", "1d"];
+
+/** One OHLC bar; `time` is unix seconds (UTC). */
+export interface Candle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+export interface CandlesResponse {
+  symbol: string;
+  /** The data source's ticker, e.g. "ES=F" for MES (micros chart their parent contract). */
+  ticker: string;
+  interval: CandleInterval;
+  /** Intervals whose history still covers this trade (finer ones expire after days/weeks). */
+  allowedIntervals: CandleInterval[];
+  /** The data is a stand-in for the traded instrument (e.g. gold futures for spot XAU/USD). */
+  approximate: boolean;
+  note: string | null;
+  candles: Candle[];
+}
+
 export interface PerformanceSummary {
   period: "weekly" | "monthly" | "yearly";
   pnl: number;

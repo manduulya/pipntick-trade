@@ -55,12 +55,14 @@ const navItems = [
     ),
   },
   {
-    label: "AI Analysis",
-    href: "/dashboard/ai",
+    // Was "AI Analysis" (Coming Soon); now the trade-on-chart review page. /dashboard/ai redirects here.
+    label: "Trade Review",
+    href: "/dashboard/review",
     icon: (
       <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3a9 9 0 100 18A9 9 0 0012 3z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7 4v3M7 17v3M17 7v3M17 18v2" />
+        <rect x="5" y="7" width="4" height="10" rx="1" />
+        <rect x="15" y="10" width="4" height="8" rx="1" />
       </svg>
     ),
   },

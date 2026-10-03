@@ -9,6 +9,7 @@ import { screenshotRoutes } from "./routes/screenshot.js";
 import { quoteRoutes } from "./routes/quote.js";
 import { ruleRoutes } from "./routes/rules.js";
 import { planRoutes } from "./routes/plans.js";
+import { candleRoutes } from "./routes/candles.js";
 
 // Default 1MB body limit is too small for base64-encoded screenshot uploads.
 const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
@@ -45,6 +46,7 @@ async function start() {
     await api.register(quoteRoutes);
     await api.register(ruleRoutes);
     await api.register(planRoutes);
+    await api.register(candleRoutes);
   });
 
   try {

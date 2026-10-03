@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 import type {
+  CandleInterval,
   CreateAccountInput,
   CreateTradeInput,
   SaveRulesInput,
@@ -236,6 +237,23 @@ export function useDeletePlan() {
     onSuccess: (_data, id) => {
       queryClient.setQueriesData<TradePlan[]>({ queryKey: ["plans"] }, (old) => (old ? old.filter((p) => p.id !== id) : old));
     },
+  });
+}
+
+// ─── Trade Review ──────────────────────────────────────────────────────────
+
+/** Candles around one trade. `entry`/`exit` are real UTC ISO instants (see tradeInstants). */
+export function useCandles(
+  params: { symbol: string; entry: string; exit?: string; interval: CandleInterval | "auto" } | null,
+) {
+  const { getToken } = useAuth();
+  return useQuery({
+    queryKey: ["candles", params?.symbol, params?.entry, params?.exit, params?.interval],
+    queryFn: async () => api.candles.get(await getToken(), params!),
+    enabled: !!params,
+    // Past price history doesn't change; the API caches too.
+    staleTime: 10 * 60_000,
+    retry: 1,
   });
 }
 

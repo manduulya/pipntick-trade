@@ -14,6 +14,7 @@ import { formatDate } from "../../../lib/time-format";
 import { TradeForm, type EntryMethod, entryTabs } from "../_components/TradeForm";
 import DeleteTradeModal from "../_components/DeleteTradeModal";
 import MistakePill from "../_components/MistakePill";
+import ViewOnChartButton from "../_components/ViewOnChartButton";
 import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
 
 type SortKey = "date" | "instrument" | "direction" | "pnl" | "duration";
@@ -406,7 +407,9 @@ export default function JournalPage() {
                               </span>
                               {t.notes || (t.isMistake ? "No description recorded." : "No notes for this trade.")}
                             </p>
-                            {!readOnly && <div className="shrink-0 flex items-center gap-2">
+                            <div className="shrink-0 flex items-center gap-2">
+                              <ViewOnChartButton tradeId={t.id} />
+                              {!readOnly && <>
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -437,7 +440,8 @@ export default function JournalPage() {
                                 </svg>
                                 Delete
                               </button>
-                            </div>}
+                              </>}
+                            </div>
                           </div>
                         </td>
                       </tr>

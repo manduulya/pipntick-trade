@@ -1,4 +1,6 @@
 import type {
+  CandleInterval,
+  CandlesResponse,
   CreateAccountInput,
   CreatePlanInput,
   CreateTradeInput,
@@ -78,6 +80,14 @@ export const api = {
   },
   quote: {
     get: (token: string | null) => request<Quote>("/api/quote", token),
+  },
+  candles: {
+    /** `entry`/`exit` are real UTC instants (ISO) — convert broker wall-clock times first. */
+    get: (token: string | null, params: { symbol: string; entry: string; exit?: string; interval: CandleInterval | "auto" }) => {
+      const qs = new URLSearchParams({ symbol: params.symbol, entry: params.entry, interval: params.interval });
+      if (params.exit) qs.set("exit", params.exit);
+      return request<CandlesResponse>(`/api/candles?${qs.toString()}`, token);
+    },
   },
   rules: {
     list: (token: string | null, accountId: string) => request<TradingRule[]>(`/api/rules?accountId=${accountId}`, token),

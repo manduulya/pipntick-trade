@@ -91,6 +91,7 @@ flowchart TD
 | `/reset-password` | Public | Reset password |
 | `/news` | Public | Market news & economic calendar |
 | `/dashboard` | Auth | Main dashboard |
+| `/dashboard/review` | Auth | Trade Review — a selected trade on a candlestick chart with entry/exit marked (`?trade=<id>`; `/dashboard/ai` redirects here) |
 | `/dashboard/trade-plan` | Auth | Trade Plan — weekly pre-trade checklist board + My Rules |
 | `/accounts/new` | Auth | Add / create trading account (in-app: sidebar account switcher → Add account; each account has a status of Active / Inactive / Archived, and one is the default) |
 | `/trades/new` | Auth | Add trade (manual, CSV, screenshot, MT4) |

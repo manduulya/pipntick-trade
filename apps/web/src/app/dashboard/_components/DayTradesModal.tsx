@@ -8,6 +8,7 @@ import { formatDate, formatDateTime } from "../../../lib/time-format";
 import { TradeForm } from "./TradeForm";
 import DeleteTradeModal from "./DeleteTradeModal";
 import MistakePill from "./MistakePill";
+import ViewOnChartButton from "./ViewOnChartButton";
 import Toast from "../Toast";
 import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
 import { useSelectedAccount } from "../../../lib/account-context";
@@ -135,7 +136,9 @@ export default function DayTradesModal({
                     </p>
                   )}
 
-                  {!readOnly && <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <ViewOnChartButton tradeId={t.id} />
+                    {!readOnly && <>
                     <button
                       type="button"
                       onClick={() => setEditingTrade(t)}
@@ -158,7 +161,8 @@ export default function DayTradesModal({
                       </svg>
                       Delete
                     </button>
-                  </div>}
+                    </>}
+                  </div>
                 </div>
               );
             })

@@ -1,10 +1,6 @@
-import ComingSoon from "../_components/ComingSoon";
+import { redirect } from "next/navigation";
 
+// "AI Analysis" became Trade Review (/dashboard/review); keep old links and bookmarks working.
 export default function AiAnalysisPage() {
-  return (
-    <ComingSoon
-      title="AI Trade Analysis"
-      description="AI-powered trade analysis and reports are on the way."
-    />
-  );
+  redirect("/dashboard/review");
 }
