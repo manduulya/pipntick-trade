@@ -29,6 +29,7 @@ export default function TradeChart({
   entryPrice,
   exitPrice,
   timeZone,
+  focus,
 }: {
   candles: Candle[];
   markers: ChartMarker[];
@@ -36,6 +37,8 @@ export default function TradeChart({
   exitPrice: number | null;
   /** IANA zone for axis/crosshair labels (the account's broker clock). */
   timeZone: string;
+  /** Time range (unix seconds) to open on — the trade plus some context (tradeFocusRange). */
+  focus: { from: number; to: number } | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -97,14 +100,25 @@ export default function TradeChart({
     }
     createSeriesMarkers(series, markers.map((m) => ({ ...m, time: m.time as UTCTimestamp })));
 
-    chart.timeScale().fitContent();
+    // Open on the trade, not the whole fetched window (1h/1d windows span days). Clamped to the
+    // data so a trade near either edge doesn't open on empty space.
+    const first = candles[0]?.time;
+    const last = candles[candles.length - 1]?.time;
+    if (focus && first !== undefined && last !== undefined && focus.to > first && focus.from < last) {
+      chart.timeScale().setVisibleRange({
+        from: Math.max(focus.from, first) as UTCTimestamp,
+        to: Math.min(focus.to, last) as UTCTimestamp,
+      });
+    } else {
+      chart.timeScale().fitContent();
+    }
 
     return () => {
       chart.remove();
       chartRef.current = null;
     };
     // Rebuilt on data/theme change — cheap at a few hundred candles, and keeps the chart stateless.
-  }, [candles, markers, entryPrice, exitPrice, timeZone, theme]);
+  }, [candles, markers, entryPrice, exitPrice, timeZone, theme, focus?.from, focus?.to]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }

@@ -7,6 +7,7 @@ import {
   formatChartTime,
   pricePrecision,
   snapToCandle,
+  tradeFocusRange,
   tradeInstants,
 } from "../../lib/trade-review-utils";
 
@@ -68,8 +69,15 @@ describe("checkTradeAgainstCandles", () => {
 
   it("accepts a trade whose prices traded at those times (within tolerance)", () => {
     expect(checkTradeAgainstCandles({ entryPrice: "4401.5", exitPrice: "4325" }, instants, candles15, "15m")).toEqual([]);
-    // Slightly outside the range but within 0.5% (front-month vs traded contract) still passes.
-    expect(checkTradeAgainstCandles({ entryPrice: "4420", exitPrice: "4325" }, instants, candles15, "15m")).toEqual([]);
+    // A few points past the range (0.1% ≈ 4.4 on gold) still passes for an exact source.
+    expect(checkTradeAgainstCandles({ entryPrice: "4413", exitPrice: "4325" }, instants, candles15, "15m")).toEqual([]);
+  });
+
+  it("is tight for exact sources but looser for stand-in data", () => {
+    // 10 points past the high: a wrong-timezone read looks like this on gold.
+    expect(checkTradeAgainstCandles({ entryPrice: "4420", exitPrice: "4325" }, instants, candles15, "15m")).toHaveLength(1);
+    // Spot XAU charted with gold futures (approximate) can legitimately sit that far apart.
+    expect(checkTradeAgainstCandles({ entryPrice: "4420", exitPrice: "4325" }, instants, candles15, "15m", true)).toEqual([]);
   });
 
   it("flags prices that never traded around then (the dummy MGC 4500 → 4600 trade)", () => {
@@ -87,6 +95,15 @@ describe("checkTradeAgainstCandles", () => {
     ]);
     expect(checkTradeAgainstCandles({ entryPrice: "4390", exitPrice: null }, { entry: new Date(100), exit: null }, candles15, "15m")[0].range)
       .toBeNull();
+  });
+});
+
+describe("tradeFocusRange", () => {
+  it("opens on the trade plus ~30 candles either side", () => {
+    const instants = { entry: new Date(36_000 * 1000), exit: new Date(39_600 * 1000) };
+    expect(tradeFocusRange(instants, "1h")).toEqual({ from: 36_000 - 30 * 3600, to: 39_600 + 30 * 3600 });
+    expect(tradeFocusRange({ entry: instants.entry, exit: null }, "5m")).toEqual({ from: 36_000 - 9000, to: 36_000 + 9000 });
+    expect(tradeFocusRange({ entry: new Date(NaN), exit: null }, "5m")).toBeNull();
   });
 });
 

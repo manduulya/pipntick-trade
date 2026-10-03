@@ -9,12 +9,13 @@ import { useSelectedAccount } from "../../../lib/account-context";
 import { ApiError } from "../../../lib/api";
 import { formatDuration } from "../../../lib/trade-utils";
 import { useTimeFormat } from "../../../lib/time-format-context";
-import { formatDateTime } from "../../../lib/time-format";
+import { formatDateTime, formatUtcOffsetLabel } from "../../../lib/time-format";
 import {
   buildTradeMarkers,
   chartTimeZone,
   checkTradeAgainstCandles,
   formatChartTime,
+  tradeFocusRange,
   tradeInstants,
 } from "../../../lib/trade-review-utils";
 import EmptyAccountsState from "../EmptyAccountsState";
@@ -77,12 +78,16 @@ function ReviewPageInner() {
   const problems = useMemo(
     () =>
       selected && instants && candles.data && candles.data.candles.length > 0
-        ? checkTradeAgainstCandles(selected, instants, candles.data.candles, candles.data.interval)
+        ? checkTradeAgainstCandles(selected, instants, candles.data.candles, candles.data.interval, candles.data.approximate)
         : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [candles.data, selected?.id, selectedAccount?.brokerTimezone, selectedAccount?.brokerUtcOffsetMinutes],
   );
   const zone = chartTimeZone(selectedAccount);
+  const focus = instants && candles.data ? tradeFocusRange(instants, candles.data.interval) : null;
+  // Accounts still on a legacy fixed offset (no IANA zone) are the usual cause of a mismatch:
+  // times read in the wrong zone, e.g. "+4" picked when the platform shows New York (UTC−4).
+  const legacyOffset = selectedAccount && !selectedAccount.brokerTimezone ? selectedAccount.brokerUtcOffsetMinutes ?? 0 : null;
 
   if (!isLoading && !isError && accounts.length === 0) return <EmptyAccountsState />;
 
@@ -270,6 +275,13 @@ function ReviewPageInner() {
                           </li>
                         ))}
                       </ul>
+                      {legacyOffset !== null && (
+                        <p className="text-xs leading-relaxed rounded-md px-2.5 py-2" style={{ backgroundColor: "rgba(245,165,36,0.08)", border: "1px solid rgba(245,165,36,0.35)", color: "var(--color-text-primary)" }}>
+                          This account reads trade times as a fixed <strong>{formatUtcOffsetLabel(legacyOffset)}</strong>. If your
+                          platform shows a different clock (e.g. New York time), open the account&apos;s ⚙ settings and set{" "}
+                          <strong>Broker Timezone</strong> to match — that&apos;s the most common cause of this.
+                        </p>
+                      )}
                       <p className="text-[11px] leading-relaxed" style={{ color: "var(--color-text-muted)" }}>
                         Check the trade&apos;s prices and times, and that the account&apos;s timezone matches your broker&apos;s
                         clock. The chart uses {candles.data.ticker}
@@ -285,6 +297,7 @@ function ReviewPageInner() {
                     entryPrice={Number(selected.entryPrice)}
                     exitPrice={selected.exitPrice !== null ? Number(selected.exitPrice) : null}
                     timeZone={zone}
+                    focus={focus}
                   />
                 )}
               </div>

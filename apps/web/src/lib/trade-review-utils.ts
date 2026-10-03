@@ -32,11 +32,13 @@ export function snapToCandle(candles: Candle[], seconds: number): number | null 
 const INTERVAL_SECONDS: Record<string, number> = { "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "1d": 86_400 };
 
 /**
- * How far outside the traded range a price may sit and still count as matching: the chart uses
- * the continuous front-month contract (the traded contract can differ by a few ticks to well
- * under 1%), so allow 0.5% of the price.
+ * How far outside the traded range a price may sit and still count as matching. Exact sources
+ * (futures continuous contract, forex, crypto, stocks) get 0.1% — enough for feed differences
+ * and the candle-boundary slack, tight enough that a trade read in the wrong timezone fails
+ * (0.5% let a gold trade 8 hours off through). Stand-ins (gold futures for spot XAU, cash index
+ * for an index CFD) can legitimately sit further apart, so they get 0.6%.
  */
-export const PRICE_TOLERANCE = 0.005;
+export const PRICE_TOLERANCE = { exact: 0.001, approximate: 0.006 } as const;
 
 export type TradeCheckProblem = {
   leg: "Entry" | "Exit";
@@ -58,7 +60,9 @@ export function checkTradeAgainstCandles(
   instants: TradeInstants,
   candles: Candle[],
   interval: string,
+  approximate = false,
 ): TradeCheckProblem[] {
+  const tolerance = approximate ? PRICE_TOLERANCE.approximate : PRICE_TOLERANCE.exact;
   const step = INTERVAL_SECONDS[interval] ?? 60;
   const legs: { leg: "Entry" | "Exit"; price: number; at: Date }[] = [{ leg: "Entry", price: Number(trade.entryPrice), at: instants.entry }];
   if (instants.exit && trade.exitPrice !== null) legs.push({ leg: "Exit", price: Number(trade.exitPrice), at: instants.exit });
@@ -76,7 +80,7 @@ export function checkTradeAgainstCandles(
     const near = candles.slice(Math.max(0, k - 1), k + 2);
     const low = Math.min(...near.map((c) => c.low));
     const high = Math.max(...near.map((c) => c.high));
-    const slack = price * PRICE_TOLERANCE;
+    const slack = price * tolerance;
     if (price < low - slack || price > high + slack) problems.push({ leg, price, time: t, range: { low, high } });
   }
   return problems;
@@ -147,6 +151,19 @@ export function chartTimeZone(account: AccountClock): string {
   const offset = account?.brokerUtcOffsetMinutes ?? 0;
   if (offset && offset % 60 === 0) return `Etc/GMT${offset < 0 ? "+" : "-"}${Math.abs(offset) / 60}`;
   return "UTC";
+}
+
+/**
+ * The time range to open the chart on: the trade plus ~30 candles either side, so a coarse
+ * interval (1h/1d, whose fetched window spans days) still opens on the trade instead of the
+ * whole window. Null if the trade has no valid entry.
+ */
+export function tradeFocusRange(instants: TradeInstants, interval: string): { from: number; to: number } | null {
+  const step = INTERVAL_SECONDS[interval] ?? 60;
+  const entry = Math.floor(instants.entry.getTime() / 1000);
+  if (Number.isNaN(entry)) return null;
+  const exit = instants.exit ? Math.floor(instants.exit.getTime() / 1000) : entry;
+  return { from: entry - 30 * step, to: exit + 30 * step };
 }
 
 /** Price precision for the axis: 5 decimals for forex-style quotes, 2 otherwise. */
