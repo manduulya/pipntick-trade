@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { and, desc, eq } from "drizzle-orm";
 import { db, tradingAccounts, trades } from "@pipntick/db";
-import { getContractSize } from "@pipntick/shared";
+import { MAX_TAKE_PROFITS, getContractSize } from "@pipntick/shared";
 import { getUserId } from "../lib/auth.js";
 import { resolveAccount, resolveAccountId } from "../lib/resolve-account.js";
 import { ARCHIVED_ACCOUNT_ERROR, isArchived } from "../lib/account-guard.js";
@@ -30,7 +30,38 @@ type CreateTradeBody = {
   commission?: number | null;
   /** Trader's own "this was a mistake" flag. On PATCH: absent = keep. */
   isMistake?: boolean;
+  /** Optional planned levels. On PATCH: absent = keep; stopLoss null / takeProfits [] = clear. */
+  stopLoss?: number | null;
+  takeProfits?: number[];
 };
+
+const isPrice = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
+
+/**
+ * Validates the optional stop/targets. Both are independent and optional; there's deliberately no
+ * "stop must be below a long's entry" rule (breakeven/trailing stops are legitimate). Targets are
+ * de-duplicated, capped at MAX_TAKE_PROFITS and sorted nearest-to-entry first. `undefined` in the
+ * result means "not sent" (PATCH keeps the stored value).
+ */
+export function normalizeLevels(
+  body: { stopLoss?: unknown; takeProfits?: unknown },
+  entryPrice: number,
+): { stopLoss?: number | null; takeProfits?: string[] } | { error: string } {
+  const out: { stopLoss?: number | null; takeProfits?: string[] } = {};
+  if (body.stopLoss !== undefined) {
+    if (body.stopLoss !== null && !isPrice(body.stopLoss)) return { error: "stopLoss must be a positive price" };
+    out.stopLoss = body.stopLoss;
+  }
+  if (body.takeProfits !== undefined) {
+    if (!Array.isArray(body.takeProfits) || !body.takeProfits.every(isPrice)) {
+      return { error: "takeProfits must be a list of positive prices" };
+    }
+    const unique = [...new Set(body.takeProfits as number[])];
+    if (unique.length > MAX_TAKE_PROFITS) return { error: `At most ${MAX_TAKE_PROFITS} take-profit targets` };
+    out.takeProfits = unique.sort((a, b) => Math.abs(a - entryPrice) - Math.abs(b - entryPrice)).map(String);
+  }
+  return out;
+}
 
 type UpdateTradeBody = Partial<CreateTradeBody>;
 
@@ -86,6 +117,8 @@ export async function tradeRoutes(app: FastifyInstance) {
     if (body.isMistake !== undefined && typeof body.isMistake !== "boolean") {
       return reply.code(400).send({ error: "isMistake must be a boolean" });
     }
+    const levels = normalizeLevels(body, body.entryPrice);
+    if ("error" in levels) return reply.code(400).send({ error: levels.error });
     const futureCutoff = Date.now() + FUTURE_TOLERANCE_MS;
     if (new Date(body.entryTime).getTime() > futureCutoff) {
       return reply.code(400).send({ error: "entryTime cannot be in the future" });
@@ -129,6 +162,8 @@ export async function tradeRoutes(app: FastifyInstance) {
         session: body.session,
         notes: body.notes ?? null,
         isMistake: body.isMistake ?? false,
+        stopLoss: levels.stopLoss != null ? String(levels.stopLoss) : null,
+        takeProfits: levels.takeProfits ?? [],
         source: body.source ?? "manual",
         screenshotUrl: body.screenshotUrl,
       })
@@ -174,6 +209,12 @@ export async function tradeRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "isMistake must be a boolean" });
     }
     const isMistake = body.isMistake === undefined ? current.isMistake : body.isMistake;
+    const levels = normalizeLevels(body, entryPrice);
+    if ("error" in levels) return reply.code(400).send({ error: levels.error });
+    // Same absent/null rule as the other optionals: not sent = keep what's stored.
+    const stopLoss =
+      levels.stopLoss === undefined ? current.stopLoss : levels.stopLoss === null ? null : String(levels.stopLoss);
+    const takeProfits = levels.takeProfits ?? current.takeProfits ?? [];
     const entryTime = body.entryTime ? new Date(body.entryTime) : current.entryTime;
     const exitTime =
       body.exitTime === undefined ? current.exitTime : body.exitTime ? new Date(body.exitTime) : null;
@@ -225,6 +266,8 @@ export async function tradeRoutes(app: FastifyInstance) {
         session: body.session ?? current.session,
         notes,
         isMistake,
+        stopLoss,
+        takeProfits,
         screenshotUrl: body.screenshotUrl ?? current.screenshotUrl,
         updatedAt: new Date(),
       })

@@ -12,8 +12,9 @@ import {
 } from "lightweight-charts";
 import type { Candle } from "@pipntick/shared";
 import { useTheme } from "../../../../lib/theme-context";
-import { formatChartTime, pricePrecision, type ChartMarker } from "../../../../lib/trade-review-utils";
+import { formatChartTime, pricePrecision, type ChartMarker, type PositionBox } from "../../../../lib/trade-review-utils";
 import { TradeMarkersPrimitive } from "./tradeMarkersPrimitive";
+import { PositionBoxPrimitive } from "./positionBoxPrimitive";
 
 // TradingView Lightweight Charts (Apache-2.0). The default TradingView attribution logo is left
 // on — the library's license asks for it.
@@ -30,6 +31,8 @@ export default function TradeChart({
   exitPrice,
   timeZone,
   focus,
+  box,
+  interval,
 }: {
   candles: Candle[];
   markers: ChartMarker[];
@@ -39,6 +42,10 @@ export default function TradeChart({
   timeZone: string;
   /** Time range (unix seconds) to open on — the trade plus some context (tradeFocusRange). */
   focus: { from: number; to: number } | null;
+  /** Stop/target position box (null when the trade has neither). */
+  box: PositionBox | null;
+  /** Candle interval of `candles` (for placing the box inside a candle). */
+  interval: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -77,11 +84,16 @@ export default function TradeChart({
       wickUpColor: "#7cc943",
       wickDownColor: "#f05252",
       priceFormat: { type: "price", precision, minMove: 1 / 10 ** precision },
-      // Keep the entry/exit price lines in view even if they sit just outside the candles' range.
+      // Keep the entry/exit (and stop/target) levels in view even outside the candles' range.
       autoscaleInfoProvider: (base: () => { priceRange: { minValue: number; maxValue: number } | null } | null) => {
         const info = base();
         if (!info?.priceRange) return info;
-        const prices = [entryPrice, ...(exitPrice !== null ? [exitPrice] : [])];
+        const prices = [
+          entryPrice,
+          ...(exitPrice !== null ? [exitPrice] : []),
+          ...(box?.stopLoss != null ? [box.stopLoss] : []),
+          ...(box?.takeProfits ?? []),
+        ];
         return {
           ...info,
           priceRange: {
@@ -98,6 +110,21 @@ export default function TradeChart({
     if (exitPrice !== null) {
       series.createPriceLine({ price: exitPrice, color: "#f5a524", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: "Exit" });
     }
+    // Stop / targets: axis-labeled levels, plus the TradingView-style position box under the candles.
+    if (box?.stopLoss != null) {
+      series.createPriceLine({ price: box.stopLoss, color: "#f05252", lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: "SL" });
+    }
+    box?.takeProfits.forEach((tp, i) => {
+      series.createPriceLine({
+        price: tp,
+        color: "#7cc943",
+        lineWidth: 1,
+        lineStyle: LineStyle.Dotted,
+        axisLabelVisible: true,
+        title: box.takeProfits.length > 1 ? `TP${i + 1}` : "TP",
+      });
+    });
+    if (box) series.attachPrimitive(new PositionBoxPrimitive(box, candles, interval));
     // Custom-drawn, outlined entry/exit marks with labels (built-in markers can't be styled this way).
     series.attachPrimitive(new TradeMarkersPrimitive(markers));
 
@@ -119,7 +146,7 @@ export default function TradeChart({
       chartRef.current = null;
     };
     // Rebuilt on data/theme change — cheap at a few hundred candles, and keeps the chart stateless.
-  }, [candles, markers, entryPrice, exitPrice, timeZone, theme, focus?.from, focus?.to]);
+  }, [candles, markers, entryPrice, exitPrice, timeZone, theme, focus?.from, focus?.to, box, interval]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }

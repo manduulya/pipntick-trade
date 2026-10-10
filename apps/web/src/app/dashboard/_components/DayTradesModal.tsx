@@ -119,6 +119,9 @@ export default function DayTradesModal({
                     <div><span style={{ color: "var(--color-text-muted)" }}>Exit time: </span><span style={{ color: "var(--color-text-secondary)" }}>{t.exitTime ? formatDateTime(t.exitTime.slice(0, 16), timeFormat) : "—"}</span></div>
                     <div><span style={{ color: "var(--color-text-muted)" }}>Duration: </span><span style={{ color: "var(--color-text-secondary)" }}>{row.duration}</span></div>
                     <div><span style={{ color: "var(--color-text-muted)" }}>Session: </span><span style={{ color: "var(--color-text-secondary)" }}>{row.session}</span></div>
+                    {row.levels && (
+                      <div className="col-span-2 sm:col-span-3"><span style={{ color: "var(--color-text-muted)" }}>Levels: </span><span style={{ color: "var(--color-text-secondary)" }}>{row.levels}</span></div>
+                    )}
                     <div>
                       <span style={{ color: "var(--color-text-muted)" }}>Fees: </span>
                       <span style={{ color: row.fees === null ? "var(--color-text-secondary)" : row.fees < 0 ? "var(--color-danger)" : "var(--color-green-neon)" }}>

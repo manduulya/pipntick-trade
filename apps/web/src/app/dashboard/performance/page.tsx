@@ -329,7 +329,19 @@ export default function PerformancePage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartColors.gridStroke} vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: chartColors.axisTick, fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={18} />
+                {/* Keyed on the unique trade index, not the date label: several trades share a day
+                    ("10/5"), and a category axis on duplicate labels made every same-day point hover
+                    as the first one. The date is only the tick text. */}
+                <XAxis
+                  dataKey="index"
+                  type="category"
+                  tickFormatter={(i: number) => balancePoints[i]?.label ?? ""}
+                  tick={{ fill: chartColors.axisTick, fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval="preserveStartEnd"
+                  minTickGap={18}
+                />
                 <YAxis
                   tick={{ fill: chartColors.axisTick, fontSize: 11 }}
                   axisLine={false}

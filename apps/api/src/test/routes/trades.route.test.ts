@@ -263,6 +263,25 @@ describe("POST /api/trades", () => {
     expect((getLastInsertValues() as any).isMistake).toBe(true);
   });
 
+  it("stores an optional stop and sorted, de-duplicated targets", async () => {
+    const app = await buildApp();
+    const base = { symbol: "MGC", direction: "long", entryPrice: 4210, exitPrice: 4204, lotSize: 2, entryTime: "2026-10-02T09:55:00.000Z" };
+    await app.inject({ method: "POST", url: "/api/trades", payload: base });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(getLastInsertValues() as any).toMatchObject({ stopLoss: null, takeProfits: [] });
+    await app.inject({ method: "POST", url: "/api/trades", payload: { ...base, stopLoss: 4200, takeProfits: [4245, 4230, 4230] } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(getLastInsertValues() as any).toMatchObject({ stopLoss: "4200", takeProfits: ["4230", "4245"] });
+  });
+
+  it("rejects a non-positive stop and more than 5 targets", async () => {
+    const app = await buildApp();
+    const base = { symbol: "MGC", direction: "long", entryPrice: 4210, lotSize: 2, entryTime: "2026-10-02T09:55:00.000Z" };
+    expect((await app.inject({ method: "POST", url: "/api/trades", payload: { ...base, stopLoss: -1 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/trades", payload: { ...base, takeProfits: [1, 2, 3, 4, 5, 6] } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/trades", payload: { ...base, takeProfits: ["4230"] } })).statusCode).toBe(400);
+  });
+
   it("rejects a non-boolean isMistake", async () => {
     const app = await buildApp();
     const res = await app.inject({
@@ -352,6 +371,26 @@ describe("PATCH /api/trades/:id", () => {
     expect(updated.swap).toBeNull();
     expect(updated.commission).toBeNull();
     expect(Number(updated.pnl)).toBeCloseTo(500); // recomputed without the -2/-3 adjustments
+  });
+
+  it("keeps the stop/targets when omitted and clears them with null / []", async () => {
+    setSelectResult([
+      {
+        trade: {
+          id: "t1", symbol: "MGC", direction: "long", entryPrice: "4210", exitPrice: "4204", lotSize: "2",
+          swap: null, commission: null, pnl: "-120.00", pnlManual: false, isMistake: false,
+          stopLoss: "4200", takeProfits: ["4230", "4245"],
+          entryTime: new Date("2026-10-02T09:55:00.000Z"), exitTime: null, session: "New York", notes: null, screenshotUrl: null,
+        },
+      },
+    ]);
+    const app = await buildApp();
+    await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { notes: "x" } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(getLastUpdateSet() as any).toMatchObject({ stopLoss: "4200", takeProfits: ["4230", "4245"] });
+    await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { stopLoss: null, takeProfits: [] } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(getLastUpdateSet() as any).toMatchObject({ stopLoss: null, takeProfits: [] });
   });
 
   it("keeps the mistake flag when omitted and changes it when sent", async () => {

@@ -1,4 +1,4 @@
-import { boolean, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, jsonb, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { tradingAccounts } from "./accounts";
 
 export const tradeDirectionEnum = pgEnum("trade_direction", ["long", "short"]);
@@ -32,6 +32,11 @@ export const trades = pgTable("trades", {
   source: tradeSourceEnum("source").notNull().default("manual"),
   screenshotUrl: text("screenshot_url"),
   notes: text("notes"),
+  // Optional planned levels, both independent: a stop-loss price and up to 5 take-profit targets
+  // (strings, like the other numeric prices; stored sorted nearest-to-entry first). Reference
+  // levels for review only — P&L still comes from the single exit price.
+  stopLoss: numeric("stop_loss", { precision: 18, scale: 8 }),
+  takeProfits: jsonb("take_profits").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

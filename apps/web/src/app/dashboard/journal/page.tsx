@@ -516,6 +516,9 @@ export default function JournalPage() {
                                 {t.isMistake ? "Mistake: " : "Notes: "}
                               </span>
                               {t.notes || (t.isMistake ? "No description recorded." : "No notes for this trade.")}
+                              {t.levels && (
+                                <span className="block mt-1 text-[11px]" style={{ color: "var(--color-text-muted)" }}>{t.levels}</span>
+                              )}
                             </p>
                             <div className="shrink-0 flex items-center gap-2">
                               <ViewOnChartButton tradeId={t.id} />

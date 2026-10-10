@@ -176,7 +176,17 @@ export type JournalRow = {
   notes: string;
   /** Flagged as a mistake by the trader — `notes` then describes the mistake. */
   isMistake: boolean;
+  /** "SL 4200 · TP 4230 / 4245" — whichever planned levels exist; "" when none. */
+  levels: string;
 };
+
+/** Planned stop/targets as one short line, e.g. "SL 4200 · TP 4230 / 4245" (either part optional). */
+export function formatLevels(stopLoss: string | null | undefined, takeProfits: string[] | null | undefined): string {
+  const parts: string[] = [];
+  if (stopLoss != null) parts.push(`SL ${Number(stopLoss)}`);
+  if (takeProfits?.length) parts.push(`TP ${takeProfits.map((t) => Number(t)).join(" / ")}`);
+  return parts.join(" · ");
+}
 
 export function toJournalRow(t: Trade): JournalRow {
   // Loose checks (`!= null`) catch both `null` and `undefined` — the latter shows up if the
@@ -198,6 +208,7 @@ export function toJournalRow(t: Trade): JournalRow {
     duration: formatDuration(t.entryTime, t.exitTime),
     notes: t.notes ?? "",
     isMistake: t.isMistake ?? false,
+    levels: formatLevels(t.stopLoss, t.takeProfits),
   };
 }
 

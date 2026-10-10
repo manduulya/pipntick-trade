@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Candle } from "@pipntick/shared";
 import {
+  buildPositionBox,
+  timeToX,
   buildTradeMarkers,
   chartTimeZone,
   checkTradeAgainstCandles,
@@ -98,6 +100,54 @@ describe("checkTradeAgainstCandles", () => {
     ]);
     expect(checkTradeAgainstCandles({ entryPrice: "4390", exitPrice: null }, { entry: new Date(100), exit: null }, candles15, "15m")[0].range)
       .toBeNull();
+  });
+});
+
+describe("buildPositionBox", () => {
+  const c15 = [900, 1800, 2700, 3600].map((t) => ({ time: t, open: 1, high: 2, low: 0.5, close: 1.5 }));
+  const base = { direction: "long" as const, entryPrice: "4210", exitPrice: "4204", stopLoss: null, takeProfits: [] as string[] };
+
+  it("is null when the trade has neither a stop nor targets", () => {
+    expect(buildPositionBox(base, { entry: new Date(1000 * 1000), exit: new Date(3000 * 1000) }, c15, "15m")).toBeNull();
+  });
+
+  it("spans entry to exit with the stop and targets sorted nearest-first", () => {
+    const box = buildPositionBox(
+      { ...base, stopLoss: "4200", takeProfits: ["4245", "4230"] },
+      { entry: new Date(1000 * 1000), exit: new Date(3000 * 1000) },
+      c15,
+      "15m",
+    )!;
+    expect(box).toMatchObject({ long: true, start: 1000, end: 3000, short: false, stopLoss: 4200, takeProfits: [4230, 4245] });
+  });
+
+  it("flags trades under 5 minutes for the default width, and draws only the parts that exist", () => {
+    const quick = buildPositionBox({ ...base, takeProfits: ["4230"] }, { entry: new Date(1000 * 1000), exit: new Date(1180 * 1000) }, c15, "15m")!;
+    expect(quick.short).toBe(true);
+    expect(quick.stopLoss).toBeNull();
+    const stopOnly = buildPositionBox({ ...base, stopLoss: "4200" }, { entry: new Date(1000 * 1000), exit: new Date(3000 * 1000) }, c15, "15m")!;
+    expect(stopOnly.takeProfits).toEqual([]);
+  });
+
+  it("runs an open trade to the end of the last candle", () => {
+    const open = buildPositionBox({ ...base, exitPrice: null, stopLoss: "4200" }, { entry: new Date(1000 * 1000), exit: null }, c15, "15m")!;
+    expect(open.end).toBe(3600 + 900);
+    expect(open.exitPrice).toBeNull();
+  });
+});
+
+describe("timeToX", () => {
+  const candles = [900, 1800, 2700].map((t) => ({ time: t, open: 1, high: 2, low: 0.5, close: 1.5 }));
+  const coordOf = (t: number) => ({ 900: 100, 1800: 110, 2700: 120 } as Record<number, number>)[t] ?? null;
+
+  it("interpolates inside the containing candle", () => {
+    expect(timeToX(candles, "15m", 900, coordOf)).toBe(100);
+    expect(timeToX(candles, "15m", 1350, coordOf)).toBe(105); // halfway through the 900 bar
+    expect(timeToX(candles, "15m", 3150, coordOf)).toBe(125); // last bar uses the previous spacing
+  });
+
+  it("is null before the data", () => {
+    expect(timeToX(candles, "15m", 100, coordOf)).toBeNull();
   });
 });
 
