@@ -12,6 +12,7 @@ import {
   detectSession,
   filterByPeriod,
   formatDuration,
+  formatLevels,
   inDateFilter,
   isClosed,
   mistakeCost,
@@ -38,6 +39,8 @@ function makeTrade(overrides: Partial<Trade> = {}): Trade {
     pnl: "50.00",
     pnlManual: false,
     isMistake: false,
+    stopLoss: null,
+    takeProfits: [],
     swap: null,
     commission: null,
     entryTime: "2026-03-15T10:00:00.000Z",
@@ -121,6 +124,15 @@ describe("daily period", () => {
     expect(periodRange("daily", 2, now).start.getDate()).toBe(30); // Sep 30
     expect(periodLabel("daily", 0, now)).toBe("Fri, Oct 2, 2026");
     expect(periodOffsetFor("daily", new Date(2026, 8, 28), now)).toBe(4);
+  });
+});
+
+describe("formatLevels", () => {
+  it("shows whichever planned levels exist", () => {
+    expect(formatLevels("4200.00000000", ["4230.00000000", "4245.5"])).toBe("SL 4200 · TP 4230 / 4245.5");
+    expect(formatLevels(null, ["4230"])).toBe("TP 4230");
+    expect(formatLevels("4200", [])).toBe("SL 4200");
+    expect(formatLevels(null, undefined)).toBe("");
   });
 });
 

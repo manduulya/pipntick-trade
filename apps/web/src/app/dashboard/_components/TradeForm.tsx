@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { CreateTradeInput, ParsedTradeScreenshot, Trade } from "@pipntick/shared";
-import { getContractSize, getFuturesContract } from "@pipntick/shared";
+import { MAX_TAKE_PROFITS, getContractSize, getFuturesContract, plannedRewardRisk } from "@pipntick/shared";
 import { useCreateTrade, useUpdateTrade } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
 import { ApiError } from "../../../lib/api";
@@ -125,6 +125,12 @@ export function TradeForm({
   const [notes, setNotes] = useState(trade?.notes ?? "");
   // "Mistake?" — when ticked, Notes becomes the (required) description of the mistake.
   const [isMistake, setIsMistake] = useState(trade?.isMistake ?? false);
+  // Optional planned levels — a stop and up to 5 targets, independent of each other. The target
+  // list always shows at least one (possibly empty) input; empty inputs are ignored on save.
+  const [stopLoss, setStopLoss] = useState(trade?.stopLoss != null ? trimTrailingZeros(trade.stopLoss) : "");
+  const [takeProfits, setTakeProfits] = useState<string[]>(
+    trade?.takeProfits?.length ? trade.takeProfits.map(trimTrailingZeros) : [""],
+  );
   const [pnlOverride, setPnlOverride] = useState(trade?.pnlManual ?? false);
   const [manualPnl, setManualPnl] = useState(trade?.pnl ?? "");
   const [missingFields, setMissingFields] = useState<string[]>([]);
@@ -140,6 +146,8 @@ export function TradeForm({
     commission: trade?.commission ?? "",
     notes: trade?.notes ?? "",
     isMistake: trade?.isMistake ?? false,
+    stopLoss: trade?.stopLoss != null ? trimTrailingZeros(trade.stopLoss) : "",
+    takeProfits: (trade?.takeProfits ?? []).map(trimTrailingZeros).join(","),
     pnlOverride: trade?.pnlManual ?? false,
     manualPnl: trade?.pnl ?? "",
   };
@@ -184,6 +192,20 @@ export function TradeForm({
   // FUTURES_CONTRACTS in @pipntick/shared), so relabel the size field and show what a point is worth.
   const futures = getFuturesContract(symbol);
 
+  // Stop / targets: soft side-of-entry hints (never blocking — breakeven/trailing stops and odd
+  // targets are the trader's call) and the planned R:R once entry, stop and a target are set.
+  const filledTargets = takeProfits.map((v) => v.trim()).filter((v) => v !== "" && Number(v) > 0).map(Number);
+  const entryNum = entryPrice !== "" ? Number(entryPrice) : null;
+  const stopNum = stopLoss !== "" ? Number(stopLoss) : null;
+  const isLong = direction === "long";
+  const stopWrongSide = entryNum !== null && stopNum !== null && (isLong ? stopNum > entryNum : stopNum < entryNum);
+  const targetWrongSide = entryNum !== null && filledTargets.some((t) => (isLong ? t < entryNum : t > entryNum));
+  const nearestTarget =
+    entryNum !== null && filledTargets.length
+      ? [...filledTargets].sort((a, b) => Math.abs(a - entryNum) - Math.abs(b - entryNum))[0]
+      : null;
+  const plannedRR = entryNum !== null ? plannedRewardRisk(entryNum, stopNum, nearestTarget) : null;
+
   const computedPnl =
     entryPrice !== "" && exitPrice !== "" && lotSize !== ""
       ? (direction === "long" ? Number(exitPrice) - Number(entryPrice) : Number(entryPrice) - Number(exitPrice)) *
@@ -196,7 +218,7 @@ export function TradeForm({
   function resetFields() {
     setSymbol(""); setEntryPrice(""); setExitPrice("");
     setEntryDateTime(""); setExitDateTime(""); setLotSize("");
-    setSwap(""); setCommission(""); setNotes(""); setIsMistake(false);
+    setSwap(""); setCommission(""); setNotes(""); setIsMistake(false); setStopLoss(""); setTakeProfits([""]);
     setPnlOverride(false); setManualPnl(""); setMissingFields([]); setDateError(null); setUnlistedSymbol(false);
   }
 
@@ -270,6 +292,8 @@ export function TradeForm({
       if (commission !== initial.commission) input.commission = commission !== "" ? Number(commission) : null;
       if (notes !== initial.notes) input.notes = notes !== "" ? notes : null;
       if (isMistake !== initial.isMistake) input.isMistake = isMistake;
+      if (stopLoss !== initial.stopLoss) input.stopLoss = stopLoss !== "" ? Number(stopLoss) : null;
+      if (filledTargets.map(String).join(",") !== initial.takeProfits) input.takeProfits = filledTargets;
       if (pnlOverride !== initial.pnlOverride || manualPnl !== initial.manualPnl) input.pnl = overridePnl;
       updateTrade.mutate({ id: trade.id, input }, {
         onSuccess: () => handleSuccess("Trade updated successfully"),
@@ -281,6 +305,8 @@ export function TradeForm({
       if (commission) input.commission = Number(commission);
       if (notes) input.notes = notes;
       if (isMistake) input.isMistake = true;
+      if (stopLoss !== "") input.stopLoss = Number(stopLoss);
+      if (filledTargets.length) input.takeProfits = filledTargets;
       if (overridePnl !== null) input.pnl = overridePnl;
       createTrade.mutate(input, {
         onSuccess: (created) => {
@@ -333,6 +359,78 @@ export function TradeForm({
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Price</label><input type="number" step="any" placeholder="0.00" value={entryPrice} onChange={(e) => { setEntryPrice(e.target.value); clearMissing("Entry Price"); }} style={missingFields.includes("Entry Price") ? missingInputStyle : inputStyle} /></div>
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Price</label><input type="number" step="any" placeholder="0.00" value={exitPrice} onChange={(e) => { setExitPrice(e.target.value); clearMissing("Exit Price"); }} style={missingFields.includes("Exit Price") ? missingInputStyle : inputStyle} /></div>
       </div>
+      {/* Optional planned levels — both independent; leaving them blank saves as before. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Stop Loss</label>
+          <input
+            type="number"
+            step="any"
+            placeholder="optional"
+            value={stopLoss}
+            onChange={(e) => setStopLoss(e.target.value)}
+            style={stopLoss ? { ...inputStyle, border: "1px solid rgba(224,82,82,0.45)" } : inputStyle}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+            Take Profit{takeProfits.length > 1 ? "s" : ""}
+          </label>
+          {takeProfits.map((tp, i) => (
+            <div key={i} className="flex items-center gap-1">
+              {takeProfits.length > 1 && (
+                <span className="text-[10px] w-6 shrink-0" style={{ color: "var(--color-text-muted)" }}>TP{i + 1}</span>
+              )}
+              <input
+                type="number"
+                step="any"
+                placeholder="optional"
+                value={tp}
+                onChange={(e) => setTakeProfits((list) => list.map((v, k) => (k === i ? e.target.value : v)))}
+                style={tp ? { ...inputStyle, border: "1px solid rgba(123,193,59,0.45)" } : inputStyle}
+              />
+              {takeProfits.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setTakeProfits((list) => list.filter((_, k) => k !== i))}
+                  aria-label={`Remove target ${i + 1}`}
+                  className="shrink-0 w-6 h-6 grid place-content-center rounded hover:opacity-70"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M6 6l12 12M18 6L6 18" /></svg>
+                </button>
+              )}
+            </div>
+          ))}
+          {takeProfits.length < MAX_TAKE_PROFITS && (
+            <button
+              type="button"
+              onClick={() => setTakeProfits((list) => [...list, ""])}
+              className="self-start text-[10px] font-semibold"
+              style={{ color: "var(--color-green-primary)" }}
+            >
+              + Add target
+            </button>
+          )}
+        </div>
+      </div>
+      {(plannedRR !== null || stopWrongSide || targetWrongSide) && (
+        <div className="flex flex-col gap-0.5 -mt-1 text-[10px]">
+          {plannedRR !== null && (
+            <span style={{ color: "var(--color-text-secondary)" }}>
+              Planned R:R <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>1 : {plannedRR.toFixed(2)}</span> (to the nearest target)
+            </span>
+          )}
+          {stopWrongSide && (
+            <span style={{ color: "#f5a524" }}>
+              Stop is on the profit side of entry for a {isLong ? "long" : "short"} — fine for a breakeven/trailing stop.
+            </span>
+          )}
+          {targetWrongSide && (
+            <span style={{ color: "#f5a524" }}>A target is on the loss side of entry for a {isLong ? "long" : "short"} — double-check it.</span>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Date & Time ({entryTzLabel})</label><DateTimePicker tzLabel={entryTzLabel} min={minDateTime} max={maxDateTime} value={entryDateTime} onChange={(v) => { setEntryDateTime(v); clearMissing("Entry Date & Time"); setDateError(null); }} style={missingFields.includes("Entry Date & Time") || dateError?.field === "Entry Date & Time" ? missingInputStyle : inputStyle} /></div>
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Date & Time ({exitTzLabel})</label><DateTimePicker tzLabel={exitTzLabel} min={entryDateTime || minDateTime} max={maxDateTime} value={exitDateTime} onChange={(v) => { setExitDateTime(v); setDateError(null); }} style={dateError?.field === "Exit Date & Time" ? missingInputStyle : inputStyle} /></div>

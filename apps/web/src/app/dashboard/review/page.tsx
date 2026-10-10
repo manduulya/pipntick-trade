@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { CandleInterval, Trade } from "@pipntick/shared";
-import { CANDLE_INTERVALS } from "@pipntick/shared";
+import { CANDLE_INTERVALS, plannedRewardRisk } from "@pipntick/shared";
 import { useCandles, useTrades } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
 import { ApiError } from "../../../lib/api";
@@ -11,6 +11,7 @@ import { formatDuration } from "../../../lib/trade-utils";
 import { useTimeFormat } from "../../../lib/time-format-context";
 import { formatDateTime, formatUtcOffsetLabel } from "../../../lib/time-format";
 import {
+  buildPositionBox,
   buildTradeMarkers,
   chartTimeZone,
   checkTradeAgainstCandles,
@@ -72,6 +73,19 @@ function ReviewPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [candles.data, selected?.id, selectedAccount?.brokerTimezone, selectedAccount?.brokerUtcOffsetMinutes],
   );
+  // Stop / targets position box (null when the trade has neither — both are optional).
+  const box = useMemo(
+    () => (selected && instants && candles.data ? buildPositionBox(selected, instants, candles.data.candles, candles.data.interval) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [candles.data, selected?.id, selected?.stopLoss, selected?.takeProfits, selectedAccount?.brokerTimezone, selectedAccount?.brokerUtcOffsetMinutes],
+  );
+  const plannedRR = selected
+    ? plannedRewardRisk(
+        Number(selected.entryPrice),
+        selected.stopLoss != null ? Number(selected.stopLoss) : null,
+        selected.takeProfits?.length ? Number(selected.takeProfits[0]) : null,
+      )
+    : null;
 
   // A trade whose prices never traded at its times (wrong price/time/timezone, or a test trade)
   // gets an explanation instead of a misleading chart.
@@ -217,6 +231,13 @@ function ReviewPageInner() {
                       <span style={{ color: "#f5a524" }}>Exit {Number(selected.exitPrice)}</span>
                     </>
                   )}
+                  {selected.stopLoss != null && <span style={{ color: "#f05252" }}>· SL {Number(selected.stopLoss)}</span>}
+                  {selected.takeProfits?.length > 0 && (
+                    <span style={{ color: "#7cc943" }}>· TP {selected.takeProfits.map((t) => Number(t)).join(" / ")}</span>
+                  )}
+                  {plannedRR !== null && (
+                    <span style={{ color: "var(--color-text-muted)" }}>· Planned R:R 1 : {plannedRR.toFixed(2)}</span>
+                  )}
                 </span>
                 {candles.data && (
                   <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
@@ -309,6 +330,8 @@ function ReviewPageInner() {
                     exitPrice={selected.exitPrice !== null ? Number(selected.exitPrice) : null}
                     timeZone={zone}
                     focus={focus}
+                    box={box}
+                    interval={candles.data.interval}
                   />
                 )}
               </div>

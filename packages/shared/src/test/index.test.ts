@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { getContractSize, getFuturesContract, isReadOnlyAccount, isRuleMet } from "../index";
+import { getContractSize, getFuturesContract, isReadOnlyAccount, isRuleMet, plannedRewardRisk } from "../index";
+
+describe("plannedRewardRisk", () => {
+  it("is target distance over stop distance for a long or short", () => {
+    expect(plannedRewardRisk(4210, 4200, 4234)).toBeCloseTo(2.4); // long
+    expect(plannedRewardRisk(4210, 4220, 4180)).toBeCloseTo(3); // short
+  });
+
+  it("is null when a level is missing or both sit on the same side", () => {
+    expect(plannedRewardRisk(4210, null, 4234)).toBeNull();
+    expect(plannedRewardRisk(4210, 4200, undefined)).toBeNull();
+    expect(plannedRewardRisk(4210, 4215, 4234)).toBeNull(); // stop above a long's entry (breakeven/trail)
+    expect(plannedRewardRisk(4210, 4210, 4234)).toBeNull(); // zero risk
+  });
+});
 
 describe("isReadOnlyAccount", () => {
   it("is true only for archived accounts", () => {

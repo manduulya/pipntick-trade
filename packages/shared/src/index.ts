@@ -42,6 +42,10 @@ export interface Trade {
   pnlManual: boolean;
   /** Flagged as a mistake by the trader; `notes` then describes the mistake. */
   isMistake: boolean;
+  /** Optional planned stop-loss price. */
+  stopLoss: string | null;
+  /** Optional take-profit targets (0–5), nearest to entry first. Empty when none. */
+  takeProfits: string[];
   /** Signed broker adjustments already folded into pnl (negative = a cost). */
   swap: string | null;
   commission: string | null;
@@ -182,6 +186,24 @@ export interface CreateTradeInput {
   commission?: number | null;
   /** Mark the trade as a mistake (PATCH: omit to keep). */
   isMistake?: boolean;
+  /** Optional stop-loss price. PATCH: omit = keep, null = clear. */
+  stopLoss?: number | null;
+  /** Optional take-profit targets (up to 5). PATCH: omit = keep, [] = clear. */
+  takeProfits?: number[];
+}
+
+export const MAX_TAKE_PROFITS = 5;
+
+/**
+ * Planned reward:risk for a trade from its entry, stop and first target, e.g. 2.4 for "1 : 2.4".
+ * Null unless all three exist and the stop/target sit on opposite sides of the entry.
+ */
+export function plannedRewardRisk(entry: number, stop: number | null | undefined, target: number | null | undefined): number | null {
+  if (stop == null || target == null || !Number.isFinite(entry)) return null;
+  const risk = Math.abs(entry - stop);
+  const reward = Math.abs(target - entry);
+  const opposite = (target - entry) * (entry - stop) > 0;
+  return risk > 0 && opposite ? reward / risk : null;
 }
 
 /** Trade fields extracted from a broker screenshot via OCR. Any field can be null if not legible/present. */

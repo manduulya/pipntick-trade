@@ -157,6 +157,75 @@ export function chartTimeZone(account: AccountClock): string {
   return "UTC";
 }
 
+// ─── Position box (stop / targets) ─────────────────────────────────────────
+
+/** Under this duration a trade's box gets a fixed default width instead of its (tiny) real span. */
+export const SHORT_TRADE_SECONDS = 5 * 60;
+
+export type PositionBox = {
+  long: boolean;
+  /** Real instants (unix seconds) the box spans: entry → exit (or the last candle for an open trade). */
+  start: number;
+  end: number;
+  /** Duration under SHORT_TRADE_SECONDS → drawn at a fixed default width. */
+  short: boolean;
+  entryPrice: number;
+  exitPrice: number | null;
+  stopLoss: number | null;
+  /** Nearest to entry first. */
+  takeProfits: number[];
+};
+
+/**
+ * The TradingView-style position box for a trade, or null when it has neither a stop nor targets
+ * (both optional — a box is drawn for whichever exist). Times are real instants, not snapped to
+ * candles, so the box spans the trade's actual duration.
+ */
+export function buildPositionBox(
+  trade: Pick<Trade, "direction" | "entryPrice" | "exitPrice" | "stopLoss" | "takeProfits">,
+  instants: TradeInstants,
+  candles: Candle[],
+  interval: string,
+): PositionBox | null {
+  const stopLoss = trade.stopLoss != null ? Number(trade.stopLoss) : null;
+  const takeProfits = (trade.takeProfits ?? []).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  if (stopLoss === null && takeProfits.length === 0) return null;
+  const entryPrice = Number(trade.entryPrice);
+  const start = Math.floor(instants.entry.getTime() / 1000);
+  const last = candles.length ? candles[candles.length - 1].time + (INTERVAL_SECONDS[interval] ?? 60) : start;
+  const end = instants.exit ? Math.floor(instants.exit.getTime() / 1000) : Math.max(start, last);
+  return {
+    long: trade.direction === "long",
+    start,
+    end,
+    short: end - start < SHORT_TRADE_SECONDS,
+    entryPrice,
+    exitPrice: trade.exitPrice !== null ? Number(trade.exitPrice) : null,
+    stopLoss,
+    takeProfits: [...takeProfits].sort((a, b) => Math.abs(a - entryPrice) - Math.abs(b - entryPrice)),
+  };
+}
+
+/**
+ * Horizontal pixel position of any instant, interpolating inside its candle: the chart can only
+ * place exact bar times, so take the containing bar's x and add the fraction of the interval
+ * elapsed times the bar spacing. Null outside the data. `coordOf` is the chart's
+ * timeToCoordinate (injected so this stays pure/testable).
+ */
+export function timeToX(candles: Candle[], interval: string, seconds: number, coordOf: (time: number) => number | null): number | null {
+  const step = INTERVAL_SECONDS[interval] ?? 60;
+  const barTime = snapToCandle(candles, seconds);
+  if (barTime === null) return null;
+  const k = candles.findIndex((c) => c.time === barTime);
+  const x = coordOf(barTime);
+  if (x === null) return null;
+  const nextX = k + 1 < candles.length ? coordOf(candles[k + 1].time) : null;
+  const prevX = k > 0 ? coordOf(candles[k - 1].time) : null;
+  const spacing = nextX !== null ? nextX - x : prevX !== null ? x - prevX : 0;
+  const frac = Math.min(1, Math.max(0, (seconds - barTime) / step));
+  return x + frac * spacing;
+}
+
 /**
  * The time range to open the chart on: the trade plus ~30 candles either side, so a coarse
  * interval (1h/1d, whose fetched window spans days) still opens on the trade instead of the
