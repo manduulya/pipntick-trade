@@ -41,6 +41,7 @@ const { mockDb, queueSelect, setInsertResult, setUpdateResult, getInsertValues, 
         return makeChain(() => undefined);
       },
     };
+    mockDb.selectDistinct = mockDb.select; // same queue
     mockDb.transaction = (fn: (tx: unknown) => unknown) => fn(mockDb);
 
     return {
@@ -92,6 +93,7 @@ function fakeAccount(overrides: Record<string, unknown> = {}) {
     status: "active",
     brokerUtcOffsetMinutes: null,
     brokerTimezone: null,
+    assetClass: "forex",
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
     ...overrides,
@@ -210,6 +212,44 @@ describe("broker timezone", () => {
     queueSelect([fakeAccount()]);
     const update = await app.inject(patch({ brokerTimezone: "UTC-5" }));
     expect(update.statusCode).toBe(400);
+  });
+});
+
+describe("asset class", () => {
+  it("stores the class on create, defaulting to forex", async () => {
+    queueSelect([], []);
+    setInsertResult([fakeAccount({ assetClass: "futures" })]);
+    const app = await buildApp();
+    await app.inject({ method: "POST", url: "/api/accounts", payload: { name: "Futures", assetClass: "futures" } });
+    expect(getInsertValues()).toMatchObject({ assetClass: "futures" });
+    await app.inject({ method: "POST", url: "/api/accounts", payload: { name: "Plain" } });
+    expect(getInsertValues()).toMatchObject({ assetClass: "forex" });
+  });
+
+  it("rejects an unknown class", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/api/accounts", payload: { name: "X", assetClass: "options" } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("blocks a change when existing trades don't fit, naming them", async () => {
+    queueSelect([fakeAccount({ assetClass: "futures" })], [{ symbol: "MES" }, { symbol: "MNQ" }]);
+    const app = await buildApp();
+    const res = await app.inject(patch({ assetClass: "stocks" }));
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ symbols: ["MES", "MNQ"] });
+    expect(getUpdateSets()).toEqual([]);
+  });
+
+  it("allows a change when the account is empty or every trade fits", async () => {
+    queueSelect([fakeAccount()], []); // forex account, no trades
+    setUpdateResult([fakeAccount({ assetClass: "futures" })]);
+    const app = await buildApp();
+    expect((await app.inject(patch({ assetClass: "futures" }))).statusCode).toBe(200);
+    expect(getUpdateSets().at(-1)).toMatchObject({ assetClass: "futures" });
+
+    queueSelect([fakeAccount({ assetClass: "forex" })], [{ symbol: "ES" }]); // ES fits stocks too
+    expect((await app.inject(patch({ assetClass: "stocks" }))).statusCode).toBe(200);
   });
 });
 

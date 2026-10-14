@@ -6,6 +6,10 @@ import { users } from "./users";
 // for history (the API rejects writes to archived accounts — see apps/api/src/lib/account-guard.ts).
 export const accountStatusEnum = pgEnum("account_status", ["active", "inactive", "archived"]);
 
+// What the account trades: drives the symbol picker, size unit and P&L sizing (see ASSET_CLASSES
+// in @pipntick/shared). Forex also covers spot metals and index CFDs.
+export const assetClassEnum = pgEnum("asset_class", ["futures", "forex", "stocks", "crypto"]);
+
 export const tradingAccounts = pgTable("trading_accounts", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id")
@@ -30,6 +34,7 @@ export const tradingAccounts = pgTable("trading_accounts", {
   // fixed offset above because it follows daylight saving; when null, the offset is the fallback
   // (legacy accounts). See accountWallClockToUtc in apps/web/src/lib/time-format.ts.
   brokerTimezone: text("broker_timezone"),
+  assetClass: assetClassEnum("asset_class").notNull().default("forex"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [

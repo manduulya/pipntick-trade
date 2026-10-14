@@ -12,6 +12,11 @@ describe("toYahooTicker", () => {
     expect(toYahooTicker("6E")?.ticker).toBe("6E=F");
   });
 
+  it("charts a colliding ticker as a stock in a stocks account", () => {
+    expect(toYahooTicker("ES", "stocks")?.ticker).toBe("ES");
+    expect(toYahooTicker("ES", "futures")?.ticker).toBe("ES=F");
+  });
+
   it("maps forex, metals, crypto, index CFDs and stocks", () => {
     expect(toYahooTicker("EUR/USD")?.ticker).toBe("EURUSD=X");
     expect(toYahooTicker("XAU/USD")).toMatchObject({ ticker: "GC=F", approximate: true });

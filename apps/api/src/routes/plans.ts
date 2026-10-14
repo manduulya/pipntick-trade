@@ -5,7 +5,7 @@ import type { RuleSnapshotItem, TradeGrade, UpdatePlanInput } from "@pipntick/sh
 import { TRADE_GRADES } from "@pipntick/shared";
 import { getUserId } from "../lib/auth.js";
 import { resolveAccount, resolveAccountId } from "../lib/resolve-account.js";
-import { ARCHIVED_ACCOUNT_ERROR, isArchived } from "../lib/account-guard.js";
+import { ARCHIVED_ACCOUNT_ERROR, isArchived, symbolClassError } from "../lib/account-guard.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_SYMBOL = 20;
@@ -48,7 +48,7 @@ export function applyAnswers(
 
 async function findOwnedPlan(userId: string, id: string) {
   const [row] = await db
-    .select({ plan: tradePlans, accountStatus: tradingAccounts.status })
+    .select({ plan: tradePlans, accountStatus: tradingAccounts.status, assetClass: tradingAccounts.assetClass })
     .from(tradePlans)
     .innerJoin(tradingAccounts, eq(tradePlans.accountId, tradingAccounts.id))
     .where(and(eq(tradePlans.id, id), eq(tradingAccounts.userId, userId)));
@@ -133,6 +133,8 @@ export async function planRoutes(app: FastifyInstance) {
       if (typeof body.symbol !== "string") return reply.code(400).send({ error: "symbol must be a string" });
       symbol = body.symbol.trim().toUpperCase();
       if (symbol.length > MAX_SYMBOL) return reply.code(400).send({ error: `symbol must be at most ${MAX_SYMBOL} characters` });
+      const classError = symbol && symbol !== current.symbol ? symbolClassError(symbol, owned.assetClass) : null;
+      if (classError) return reply.code(400).send({ error: classError });
     }
 
     let direction = current.direction;

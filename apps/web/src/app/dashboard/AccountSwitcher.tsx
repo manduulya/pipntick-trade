@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { TradingAccount } from "@pipntick/shared";
+import { ASSET_CLASSES } from "@pipntick/shared";
 import { useSelectedAccount } from "../../lib/account-context";
 import AddAccountModal from "./AddAccountModal";
 import AccountSettingsModal from "./AccountSettingsModal";
@@ -118,7 +119,7 @@ export default function AccountSwitcher() {
             <StatusPill status={account.status} />
           </span>
           <span className="text-[10px] truncate" style={{ color: "var(--color-text-muted)" }}>
-            {[account.broker, account.currency].filter(Boolean).join(" · ")}
+            {[ASSET_CLASSES[account.assetClass]?.label, account.broker, account.currency].filter(Boolean).join(" · ")}
           </span>
         </button>
         <button
@@ -161,7 +162,7 @@ export default function AccountSwitcher() {
           </span>
           {selectedAccount && (
             <span className="text-[10px] truncate" style={{ color: "var(--color-text-muted)" }}>
-              {[selectedAccount.broker, selectedAccount.currency].filter(Boolean).join(" · ")}
+              {[ASSET_CLASSES[selectedAccount.assetClass]?.label, selectedAccount.broker, selectedAccount.currency].filter(Boolean).join(" · ")}
             </span>
           )}
         </div>

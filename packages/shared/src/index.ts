@@ -24,6 +24,8 @@ export interface TradingAccount {
   /** IANA timezone of the broker clock (e.g. "America/New_York"); follows daylight saving.
    * Takes precedence over brokerUtcOffsetMinutes, which is only the legacy fallback. */
   brokerTimezone: string | null;
+  /** What the account trades; drives the symbol picker, size unit and P&L sizing. */
+  assetClass: AssetClass;
   createdAt: string;
   updatedAt: string;
 }
@@ -129,13 +131,134 @@ export function getFuturesContract(symbol: string): { name: string; pointValue: 
  * crypto) defaults to 1 — "lot" is treated as the raw unit entered (shares, coins) since those
  * conventions vary by broker.
  */
-export function getContractSize(symbol: string): number {
+export function getContractSize(symbol: string, assetClass?: AssetClass): number {
   const s = symbol.trim().toUpperCase();
+  // The account's asset class settles ticker collisions: "ES" in a stocks account is Eversource
+  // shares (×1), not the E-mini future (×$50).
+  if (assetClass === "stocks" || assetClass === "crypto") return 1;
   const future = FUTURES_CONTRACTS[s];
-  if (future) return future.pointValue;
+  if (future && assetClass !== "forex") return future.pointValue;
   if (s in CONTRACT_SIZE_OVERRIDES) return CONTRACT_SIZE_OVERRIDES[s];
   if (FOREX_PAIR_RE.test(s)) return 100000;
   return 1;
+}
+
+// ─── Asset classes ─────────────────────────────────────────────────────────
+
+/**
+ * What an account trades. It decides which symbols the instrument picker offers, the size unit
+ * (contracts / lots / shares / coins) and P&L sizing. Forex follows MT4/MT5 brokers and also
+ * covers spot metals and index CFDs. Options aren't supported yet (shown as "coming soon").
+ */
+export type AssetClass = "futures" | "forex" | "stocks" | "crypto";
+export const ASSET_CLASS_VALUES: readonly AssetClass[] = ["futures", "forex", "stocks", "crypto"];
+
+export const ASSET_CLASSES: Record<
+  AssetClass,
+  { label: string; unit: string; unitPlural: string; sizeLabel: string; step: string; min?: number; placeholder: string; example: string }
+> = {
+  futures: { label: "Futures", unit: "contract", unitPlural: "contracts", sizeLabel: "Contracts", step: "1", min: 1, placeholder: "1", example: "MES" },
+  forex: { label: "Forex", unit: "lot", unitPlural: "lots", sizeLabel: "Lots", step: "any", placeholder: "0.01", example: "EUR/USD" },
+  stocks: { label: "Stocks", unit: "share", unitPlural: "shares", sizeLabel: "Shares", step: "any", placeholder: "100", example: "AAPL" },
+  crypto: { label: "Crypto", unit: "coin", unitPlural: "coins", sizeLabel: "Coins", step: "any", placeholder: "0.1", example: "BTC/USD" },
+};
+
+export function isAssetClass(value: unknown): value is AssetClass {
+  return typeof value === "string" && (ASSET_CLASS_VALUES as readonly string[]).includes(value);
+}
+
+export interface Instrument {
+  symbol: string;
+  name: string;
+}
+
+/** Hand-curated forex / metals / index CFDs (all "forex" accounts) and crypto. Futures come from
+ * FUTURES_CONTRACTS and stocks from the web app's exchange symbol directory. */
+export const CURATED_INSTRUMENTS: (Instrument & { assetClass: "forex" | "crypto" })[] = [
+  // Forex majors
+  { symbol: "EUR/USD", name: "Euro / US Dollar", assetClass: "forex" },
+  { symbol: "GBP/USD", name: "British Pound / US Dollar", assetClass: "forex" },
+  { symbol: "USD/JPY", name: "US Dollar / Japanese Yen", assetClass: "forex" },
+  { symbol: "USD/CHF", name: "US Dollar / Swiss Franc", assetClass: "forex" },
+  { symbol: "USD/CAD", name: "US Dollar / Canadian Dollar", assetClass: "forex" },
+  { symbol: "AUD/USD", name: "Australian Dollar / US Dollar", assetClass: "forex" },
+  { symbol: "NZD/USD", name: "New Zealand Dollar / US Dollar", assetClass: "forex" },
+  // Forex crosses
+  { symbol: "EUR/GBP", name: "Euro / British Pound", assetClass: "forex" },
+  { symbol: "EUR/JPY", name: "Euro / Japanese Yen", assetClass: "forex" },
+  { symbol: "GBP/JPY", name: "British Pound / Japanese Yen", assetClass: "forex" },
+  { symbol: "EUR/AUD", name: "Euro / Australian Dollar", assetClass: "forex" },
+  { symbol: "EUR/CHF", name: "Euro / Swiss Franc", assetClass: "forex" },
+  { symbol: "AUD/JPY", name: "Australian Dollar / Japanese Yen", assetClass: "forex" },
+  { symbol: "GBP/AUD", name: "British Pound / Australian Dollar", assetClass: "forex" },
+  { symbol: "CHF/JPY", name: "Swiss Franc / Japanese Yen", assetClass: "forex" },
+  { symbol: "NZD/JPY", name: "New Zealand Dollar / Japanese Yen", assetClass: "forex" },
+  { symbol: "CAD/JPY", name: "Canadian Dollar / Japanese Yen", assetClass: "forex" },
+  // Metals
+  { symbol: "XAU/USD", name: "Gold / US Dollar", assetClass: "forex" },
+  { symbol: "XAG/USD", name: "Silver / US Dollar", assetClass: "forex" },
+  // Index CFDs
+  { symbol: "US30", name: "Dow Jones Industrial Average", assetClass: "forex" },
+  { symbol: "NAS100", name: "Nasdaq 100", assetClass: "forex" },
+  { symbol: "SPX500", name: "S&P 500", assetClass: "forex" },
+  { symbol: "GER40", name: "Germany 40", assetClass: "forex" },
+  { symbol: "UK100", name: "FTSE 100", assetClass: "forex" },
+  // Crypto
+  { symbol: "BTC/USD", name: "Bitcoin / US Dollar", assetClass: "crypto" },
+  { symbol: "ETH/USD", name: "Ethereum / US Dollar", assetClass: "crypto" },
+  { symbol: "XRP/USD", name: "XRP / US Dollar", assetClass: "crypto" },
+  { symbol: "SOL/USD", name: "Solana / US Dollar", assetClass: "crypto" },
+];
+
+const STOCK_TICKER_RE = /^[A-Z][A-Z0-9.\-]{0,9}$/;
+
+/** The curated entry for a symbol, also accepting a bare pair like "EURUSD" for "EUR/USD". */
+function findCurated(symbol: string) {
+  const s = symbol.trim().toUpperCase();
+  const candidates = /^[A-Z]{6}$/.test(s) ? [s, `${s.slice(0, 3)}/${s.slice(3)}`] : [s];
+  return CURATED_INSTRUMENTS.find((i) => candidates.includes(i.symbol)) ?? null;
+}
+
+/**
+ * Whether a symbol belongs to an asset class. Futures: a known CME root. Forex / crypto: a
+ * curated instrument of that class. Stocks: any plain ticker that isn't a curated instrument, so
+ * "ES" is a valid stock (Eversource) in a stocks account. The web picker further limits stocks to
+ * the listed exchange directory; the server can only check the shape.
+ */
+export function symbolFitsClass(symbol: string, assetClass: AssetClass): boolean {
+  const s = symbol.trim().toUpperCase();
+  if (!s) return false;
+  switch (assetClass) {
+    case "futures":
+      return s in FUTURES_CONTRACTS;
+    case "forex":
+    case "crypto":
+      return findCurated(s)?.assetClass === assetClass;
+    case "stocks":
+      return STOCK_TICKER_RE.test(s) && !findCurated(s);
+  }
+}
+
+/**
+ * The symbols that block switching an account from `from` to `to`. A trade blocks it unless it
+ * fits the new class *and* wasn't entered as the current one: "MES" is stock-shaped, but switching
+ * a futures account to stocks would silently turn its contracts into shares. Only legacy trades
+ * that never fit the current class can carry over. De-duplicated, in first-seen order.
+ */
+export function classChangeMisfits(symbols: string[], from: AssetClass, to: AssetClass): string[] {
+  if (from === to) return [];
+  return [...new Set(symbols)].filter((s) => symbolFitsClass(s, from) || !symbolFitsClass(s, to));
+}
+
+/** Best guess at a symbol's class from the symbol alone (futures roots win collisions). Only for
+ * legacy trades that don't fit their account's class. */
+export function inferAssetClass(symbol: string): AssetClass {
+  const s = symbol.trim().toUpperCase();
+  if (s in FUTURES_CONTRACTS) return "futures";
+  const curated = findCurated(s);
+  if (curated) return curated.assetClass;
+  if (FOREX_PAIR_RE.test(s)) return "forex";
+  return "stocks";
 }
 
 export interface CreateAccountInput {
@@ -151,6 +274,8 @@ export interface CreateAccountInput {
   brokerUtcOffsetMinutes?: number | null;
   /** IANA timezone (e.g. "America/New_York"). Same absent/null/value rule as the offset. */
   brokerTimezone?: string | null;
+  /** Defaults to "forex" on create. On update, only allowed when every existing trade fits. */
+  assetClass?: AssetClass;
 }
 
 export type UpdateAccountInput = Partial<CreateAccountInput> & {

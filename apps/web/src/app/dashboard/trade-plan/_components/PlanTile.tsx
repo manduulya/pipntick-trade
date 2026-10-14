@@ -6,12 +6,7 @@ import { TRADE_GRADES, isRuleMet } from "@pipntick/shared";
 import { useDeletePlan, useDeleteTrade, useUpdatePlan } from "../../../../lib/hooks";
 import { ApiError } from "../../../../lib/api";
 import { GRADE_COLORS, choiceTone, planProgress, toAnswers } from "../../../../lib/trade-plan-utils";
-import {
-  findInstrument,
-  loadStockInstruments,
-  stockInstrumentsLoaded,
-  useStockInstrumentsLoaded,
-} from "../../../../lib/instruments";
+import { ensureInstruments, findInstrument, instrumentsReady, useInstrumentsReady } from "../../../../lib/instruments";
 import InstrumentInput from "../../InstrumentInput";
 import { useSelectedAccount } from "../../../../lib/account-context";
 
@@ -61,10 +56,14 @@ export default function PlanTile({
   const planRef = useRef(plan);
   planRef.current = plan;
 
-  // Re-render once the stock list arrives so stock tickers resolve as listed.
-  useStockInstrumentsLoaded();
+  // An archived account locks every tile (see `locked` below). The account's asset class limits
+  // which instruments the symbol field accepts.
+  const { selectedAccount, readOnly: accountReadOnly } = useSelectedAccount();
+  const assetClass = selectedAccount?.assetClass ?? "forex";
+  // Re-render once a stocks account's list arrives so stock tickers resolve as listed.
+  useInstrumentsReady(assetClass);
   // Only a listed instrument counts as a symbol — the plan can't be logged or skipped until then.
-  const instrument = findInstrument(symbol);
+  const instrument = findInstrument(symbol, assetClass);
 
   // Follow server-side symbol changes, but never clobber what the user is typing.
   useEffect(() => {
@@ -79,7 +78,6 @@ export default function PlanTile({
   // Skipped/logged plans are a record of the decision — read-only until Undo reopens them. The API
   // rejects edits to them as well.
   // An archived account locks every tile too, with no Skip/Log/Undo — the whole account is read-only.
-  const { readOnly: accountReadOnly } = useSelectedAccount();
   const locked = !isPlanned || accountReadOnly;
   // Reopened via Undo → Keep trade: still attached to its Journal trade.
   const linked = !!plan.journalTradeId;
@@ -98,9 +96,9 @@ export default function PlanTile({
       if (planRef.current.symbol) patch({ symbol: "" }, { symbol: "" });
       return;
     }
-    if (!stockInstrumentsLoaded()) await loadStockInstruments();
+    if (!instrumentsReady(assetClass)) await ensureInstruments(assetClass);
     if (seq !== commitSeq.current) return; // a newer commit (e.g. a pick) superseded this one
-    const inst = findInstrument(v);
+    const inst = findInstrument(v, assetClass);
     if (!inst) {
       setSymbolError(true);
       return;
@@ -242,6 +240,7 @@ export default function PlanTile({
           <InstrumentInput
             portal
             value={symbol}
+            assetClass={assetClass}
             placeholder="Symbol"
             onChange={(v) => { setSymbol(v.toUpperCase()); setSymbolError(false); }}
             onSelect={(s) => { setSymbol(s); commitSymbol(s); }}

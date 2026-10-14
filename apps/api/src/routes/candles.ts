@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { CandleInterval, CandlesResponse } from "@pipntick/shared";
-import { CANDLE_INTERVALS } from "@pipntick/shared";
+import { CANDLE_INTERVALS, isAssetClass } from "@pipntick/shared";
 import { getUserId } from "../lib/auth.js";
 import { MarketDataError, allowedIntervals, fetchCandles, pickWindow, toYahooTicker } from "../lib/market-data.js";
 
@@ -12,7 +12,7 @@ export async function candleRoutes(app: FastifyInstance) {
     const userId = getUserId(request);
     if (!userId) return reply.code(401).send({ error: "Unauthorized" });
 
-    const q = request.query as { symbol?: string; entry?: string; exit?: string; interval?: string };
+    const q = request.query as { symbol?: string; entry?: string; exit?: string; interval?: string; assetClass?: string };
     if (!q.symbol || !q.entry) return reply.code(400).send({ error: "symbol and entry are required" });
 
     const now = Date.now();
@@ -27,7 +27,7 @@ export async function candleRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: `interval must be one of ${CANDLE_INTERVALS.join(", ")}` });
     }
 
-    const info = toYahooTicker(q.symbol);
+    const info = toYahooTicker(q.symbol, isAssetClass(q.assetClass) ? q.assetClass : undefined);
     if (!info) return reply.code(404).send({ error: `No chart data available for ${q.symbol}` });
 
     const clampedExit = Math.min(exitMs, now);

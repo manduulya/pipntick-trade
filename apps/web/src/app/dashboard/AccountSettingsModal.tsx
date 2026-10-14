@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import type { AccountStatus, TradingAccount } from "@pipntick/shared";
-import { ACCOUNT_STATUSES } from "@pipntick/shared";
+import type { AccountStatus, AssetClass, TradingAccount } from "@pipntick/shared";
+import { ACCOUNT_STATUSES, ASSET_CLASSES, classChangeMisfits } from "@pipntick/shared";
 import { useAccountTrades, useUpdateAccount } from "../../lib/hooks";
 import { useSelectedAccount } from "../../lib/account-context";
 import { DefaultStar } from "./AccountSwitcher";
@@ -13,6 +13,7 @@ import { ApiError } from "../../lib/api";
 import { useLockBodyScroll } from "../../lib/use-lock-body-scroll";
 import DeleteTradingAccountModal from "./DeleteTradingAccountModal";
 import BrokerTimezoneField from "./BrokerTimezoneField";
+import AssetClassField from "./AssetClassField";
 
 const inputStyle: React.CSSProperties = {
   backgroundColor: "var(--color-bg-base)",
@@ -46,6 +47,7 @@ export default function AccountSettingsModal({
   // Only send timezone fields once the user actually picks one — an untouched legacy account keeps
   // its fixed offset rather than being silently switched to "not set".
   const [timezoneTouched, setTimezoneTouched] = useState(false);
+  const [assetClass, setAssetClass] = useState<AssetClass>(account.assetClass);
   const [formError, setFormError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -104,6 +106,15 @@ export default function AccountSettingsModal({
     return accountTrades.reduce((min, t) => (t.entryTime < min ? t.entryTime : min), accountTrades[0].entryTime).slice(0, 10);
   }, [accountTrades]);
 
+  // The class can only change while every existing trade fits the new one (the API enforces the
+  // same rule with a 409); flag it as soon as a misfit class is picked.
+  const assetClassError = useMemo(() => {
+    if (assetClass === account.assetClass || !accountTrades) return null;
+    const misfits = classChangeMisfits(accountTrades.map((t) => t.symbol), account.assetClass, assetClass);
+    if (!misfits.length) return null;
+    return `Can't switch to ${ASSET_CLASSES[assetClass].label}: this account has ${misfits.slice(0, 5).join(", ")}${misfits.length > 5 ? "…" : ""} trades.`;
+  }, [assetClass, account.assetClass, accountTrades]);
+
   function handleClose() {
     setVisible(false);
     setTimeout(onClose, 300);
@@ -132,6 +143,7 @@ export default function AccountSettingsModal({
       );
       return;
     }
+    if (assetClassError) return;
 
     updateAccount.mutate(
       {
@@ -144,6 +156,7 @@ export default function AccountSettingsModal({
           createdAt: new Date(createdAt).toISOString(),
           // Picking a zone (or "Not set") replaces the legacy fixed offset entirely.
           ...(timezoneTouched ? { brokerTimezone: brokerTimezone || null, brokerUtcOffsetMinutes: null } : {}),
+          ...(assetClass !== account.assetClass ? { assetClass } : {}),
         },
       },
       {
@@ -282,6 +295,7 @@ export default function AccountSettingsModal({
               </p>
             )}
           </div>
+          <AssetClassField value={assetClass} onChange={setAssetClass} error={assetClassError} />
           <BrokerTimezoneField
             value={brokerTimezone}
             legacyOffsetMinutes={timezoneTouched ? null : account.brokerUtcOffsetMinutes}

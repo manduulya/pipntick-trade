@@ -20,9 +20,23 @@ import {
   periodOffsetFor,
   periodRange,
   pnlOf,
+  sizeUnitSuffix,
   toDatetimeLocal,
   toJournalRow,
 } from "../../lib/trade-utils";
+
+describe("sizeUnitSuffix", () => {
+  it("is null when the trade fits the account's class (the column header names the unit)", () => {
+    expect(sizeUnitSuffix("MES", 5, "futures")).toBeNull();
+    expect(sizeUnitSuffix("EUR/USD", 0.5, "forex")).toBeNull();
+  });
+
+  it("names a legacy trade's own unit when it doesn't fit", () => {
+    expect(sizeUnitSuffix("EUR/USD", 0.5, "futures")).toBe("lots");
+    expect(sizeUnitSuffix("XAU/USD", 1, "futures")).toBe("lot");
+    expect(sizeUnitSuffix("MES", 2, "forex")).toBe("contracts");
+  });
+});
 import { brokerWallClockToUtc } from "../../lib/time-format";
 
 // Minimal builder — only the fields each test cares about need overriding.
@@ -133,6 +147,16 @@ describe("formatLevels", () => {
     expect(formatLevels(null, ["4230"])).toBe("TP 4230");
     expect(formatLevels("4200", [])).toBe("SL 4200");
     expect(formatLevels(null, undefined)).toBe("");
+  });
+
+  it("gives the Journal's SL / TP columns numeric levels", () => {
+    const base = toJournalRow({
+      id: "t", accountId: "a", symbol: "MGC", direction: "long", status: "closed", entryPrice: "4210", exitPrice: "4220",
+      lotSize: "1", pnl: "100", pnlManual: false, isMistake: false, stopLoss: "4200.00000000", takeProfits: ["4230", "4245.5"],
+      swap: null, commission: null, entryTime: "2026-10-01T10:00:00.000Z", exitTime: "2026-10-01T11:00:00.000Z",
+      session: "London", source: "manual", screenshotUrl: null, notes: null, createdAt: "", updatedAt: "",
+    } as Trade);
+    expect([base.stopLoss, base.takeProfits]).toEqual([4200, [4230, 4245.5]]);
   });
 });
 

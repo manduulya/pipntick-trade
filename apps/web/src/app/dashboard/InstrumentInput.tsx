@@ -2,21 +2,25 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { matchInstruments, loadStockInstruments } from "../../lib/instruments";
+import { ASSET_CLASSES, type AssetClass } from "@pipntick/shared";
+import { matchInstruments, useInstrumentsReady } from "../../lib/instruments";
 
 const PORTAL_MIN_WIDTH = 280;
 
 export default function InstrumentInput({
   value,
+  assetClass,
   onChange,
   onSelect,
   style,
   className,
-  placeholder = "Instrument (e.g. EUR/USD)",
+  placeholder,
   portal = false,
   inputProps,
 }: {
   value: string;
+  /** The account's asset class — only its instruments are suggested. */
+  assetClass: AssetClass;
   /** Every keystroke. */
   onChange: (value: string) => void;
   /** A symbol picked from the suggestion list (defaults to onChange). */
@@ -31,22 +35,19 @@ export default function InstrumentInput({
 }) {
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
-  const [, forceRematch] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [rect, setRect] = useState<{ left: number; top: number; width: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const matches = matchInstruments(value);
+  // Re-renders once a stocks account's (lazily fetched) list arrives.
+  useInstrumentsReady(assetClass);
+  const matches = matchInstruments(value, assetClass);
   const showList = open && matches.length > 0;
 
   useEffect(() => setHighlighted(0), [value]);
   useEffect(() => setMounted(true), []);
-
-  useEffect(() => {
-    loadStockInstruments().then(() => forceRematch((n) => n + 1));
-  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -146,7 +147,7 @@ export default function InstrumentInput({
         {...inputProps}
         ref={inputRef}
         type="text"
-        placeholder={placeholder}
+        placeholder={placeholder ?? `Instrument (e.g. ${ASSET_CLASSES[assetClass].example})`}
         value={value}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={(e) => { setOpen(true); inputProps?.onFocus?.(e); }}
