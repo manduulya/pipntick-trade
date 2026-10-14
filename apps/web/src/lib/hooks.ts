@@ -11,6 +11,7 @@ import type {
   TradingAccount,
   UpdateAccountInput,
   UpdatePlanInput,
+  AssetClass,
 } from "@pipntick/shared";
 import { api } from "./api";
 import { useSelectedAccount } from "./account-context";
@@ -244,11 +245,11 @@ export function useDeletePlan() {
 
 /** Candles around one trade. `entry`/`exit` are real UTC ISO instants (see tradeInstants). */
 export function useCandles(
-  params: { symbol: string; entry: string; exit?: string; interval: CandleInterval } | null,
+  params: { symbol: string; entry: string; exit?: string; interval: CandleInterval; assetClass?: AssetClass } | null,
 ) {
   const { getToken } = useAuth();
   return useQuery({
-    queryKey: ["candles", params?.symbol, params?.entry, params?.exit, params?.interval],
+    queryKey: ["candles", params?.symbol, params?.entry, params?.exit, params?.interval, params?.assetClass],
     queryFn: async () => api.candles.get(await getToken(), params!),
     enabled: !!params,
     // Past price history doesn't change; the API caches too.

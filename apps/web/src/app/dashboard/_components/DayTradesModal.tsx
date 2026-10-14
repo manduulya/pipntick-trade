@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { Trade } from "@pipntick/shared";
-import { toJournalRow } from "../../../lib/trade-utils";
+import { ASSET_CLASSES } from "@pipntick/shared";
+import { sizeUnitSuffix, toJournalRow } from "../../../lib/trade-utils";
 import { useTimeFormat } from "../../../lib/time-format-context";
 import { formatDate, formatDateTime } from "../../../lib/time-format";
 import { TradeForm } from "./TradeForm";
@@ -37,7 +38,10 @@ export default function DayTradesModal({
 
   const { timeFormat } = useTimeFormat();
   // Archived accounts are read-only — hide Edit/Delete rather than let them 409.
-  const { readOnly } = useSelectedAccount();
+  const { readOnly, selectedAccount } = useSelectedAccount();
+  // Sizes read in the account's unit ("5 contracts", "0.5 lots").
+  const assetClass = selectedAccount?.assetClass ?? "forex";
+  const sizeSpec = ASSET_CLASSES[assetClass];
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -114,14 +118,22 @@ export default function DayTradesModal({
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 text-[11px] mb-2">
                     <div><span style={{ color: "var(--color-text-muted)" }}>Entry: </span><span style={{ color: "var(--color-text-secondary)" }}>{row.entryPrice}</span></div>
                     <div><span style={{ color: "var(--color-text-muted)" }}>Exit: </span><span style={{ color: "var(--color-text-secondary)" }}>{row.exitPrice ?? "—"}</span></div>
-                    <div><span style={{ color: "var(--color-text-muted)" }}>Lot size: </span><span style={{ color: "var(--color-text-secondary)" }}>{row.lotSize}</span></div>
+                    <div><span style={{ color: "var(--color-text-muted)" }}>Size: </span><span style={{ color: "var(--color-text-secondary)" }}>{row.lotSize} {sizeUnitSuffix(row.instrument, row.lotSize, assetClass) ?? (row.lotSize === 1 ? sizeSpec.unit : sizeSpec.unitPlural)}</span></div>
                     <div><span style={{ color: "var(--color-text-muted)" }}>Entry time: </span><span style={{ color: "var(--color-text-secondary)" }}>{formatDateTime(t.entryTime.slice(0, 16), timeFormat)}</span></div>
                     <div><span style={{ color: "var(--color-text-muted)" }}>Exit time: </span><span style={{ color: "var(--color-text-secondary)" }}>{t.exitTime ? formatDateTime(t.exitTime.slice(0, 16), timeFormat) : "—"}</span></div>
                     <div><span style={{ color: "var(--color-text-muted)" }}>Duration: </span><span style={{ color: "var(--color-text-secondary)" }}>{row.duration}</span></div>
+                    {/* Planned levels, always listed like the Journal's SL / TP columns ("—" when unset). */}
+                    <div>
+                      <span style={{ color: "var(--color-text-muted)" }}>SL: </span>
+                      <span style={{ color: row.stopLoss !== null ? "var(--color-danger)" : "var(--color-text-secondary)" }}>{row.stopLoss ?? "—"}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--color-text-muted)" }}>TP: </span>
+                      <span style={{ color: row.takeProfits.length ? "var(--color-green-neon)" : "var(--color-text-secondary)" }}>
+                        {row.takeProfits.length ? row.takeProfits.join(" / ") : "—"}
+                      </span>
+                    </div>
                     <div><span style={{ color: "var(--color-text-muted)" }}>Session: </span><span style={{ color: "var(--color-text-secondary)" }}>{row.session}</span></div>
-                    {row.levels && (
-                      <div className="col-span-2 sm:col-span-3"><span style={{ color: "var(--color-text-muted)" }}>Levels: </span><span style={{ color: "var(--color-text-secondary)" }}>{row.levels}</span></div>
-                    )}
                     <div>
                       <span style={{ color: "var(--color-text-muted)" }}>Fees: </span>
                       <span style={{ color: row.fees === null ? "var(--color-text-secondary)" : row.fees < 0 ? "var(--color-danger)" : "var(--color-green-neon)" }}>

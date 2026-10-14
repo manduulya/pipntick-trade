@@ -4,18 +4,19 @@ import { getDefaultAccount } from "./ensure-account.js";
 
 /**
  * The caller's requested account if they own it, else their default account, else null. Returns
- * the status too so write routes can refuse archived accounts without another query.
+ * the status too so write routes can refuse archived accounts without another query, and the
+ * asset class for symbol checks and P&L sizing.
  */
 export async function resolveAccount(userId: string, requestedAccountId?: string) {
   if (requestedAccountId) {
     const [account] = await db
-      .select({ id: tradingAccounts.id, status: tradingAccounts.status })
+      .select({ id: tradingAccounts.id, status: tradingAccounts.status, assetClass: tradingAccounts.assetClass })
       .from(tradingAccounts)
       .where(and(eq(tradingAccounts.id, requestedAccountId), eq(tradingAccounts.userId, userId)));
     return account ?? null;
   }
   const account = await getDefaultAccount(userId);
-  return account ? { id: account.id, status: account.status } : null;
+  return account ? { id: account.id, status: account.status, assetClass: account.assetClass } : null;
 }
 
 /** Id-only form of resolveAccount, for read routes. */

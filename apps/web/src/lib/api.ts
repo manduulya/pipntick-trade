@@ -13,6 +13,7 @@ import type {
   TradingRule,
   UpdateAccountInput,
   UpdatePlanInput,
+  AssetClass,
 } from "@pipntick/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -83,9 +84,11 @@ export const api = {
   },
   candles: {
     /** `entry`/`exit` are real UTC instants (ISO) — convert broker wall-clock times first. */
-    get: (token: string | null, params: { symbol: string; entry: string; exit?: string; interval: CandleInterval }) => {
+    get: (token: string | null, params: { symbol: string; entry: string; exit?: string; interval: CandleInterval; assetClass?: AssetClass }) => {
       const qs = new URLSearchParams({ symbol: params.symbol, entry: params.entry, interval: params.interval });
       if (params.exit) qs.set("exit", params.exit);
+      // Settles ticker collisions server-side ("ES" in a stocks account is Eversource, not ES=F).
+      if (params.assetClass) qs.set("assetClass", params.assetClass);
       return request<CandlesResponse>(`/api/candles?${qs.toString()}`, token);
     },
   },

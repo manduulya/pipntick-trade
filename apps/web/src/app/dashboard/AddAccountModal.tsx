@@ -6,7 +6,9 @@ import { useCreateAccount } from "../../lib/hooks";
 import { useSelectedAccount } from "../../lib/account-context";
 import { ApiError } from "../../lib/api";
 import { useLockBodyScroll } from "../../lib/use-lock-body-scroll";
+import type { AssetClass } from "@pipntick/shared";
 import BrokerTimezoneField from "./BrokerTimezoneField";
+import AssetClassField from "./AssetClassField";
 
 const inputStyle: React.CSSProperties = {
   backgroundColor: "var(--color-bg-base)",
@@ -35,6 +37,8 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
   const [startingBalance, setStartingBalance] = useState("");
   const [createdAt, setCreatedAt] = useState(today);
   const [brokerTimezone, setBrokerTimezone] = useState("");
+  // Required — no preselection, so the trader consciously picks Futures / Forex / Stocks / Crypto.
+  const [assetClass, setAssetClass] = useState<AssetClass | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const createAccount = useCreateAccount();
@@ -62,6 +66,10 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
       setFormError("Account created date cannot be in the future.");
       return;
     }
+    if (!assetClass) {
+      setFormError("Choose what you trade in this account.");
+      return;
+    }
 
     createAccount.mutate(
       {
@@ -71,6 +79,7 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
         startingBalance: startingBalance ? Number(startingBalance) : undefined,
         createdAt: new Date(createdAt).toISOString(),
         brokerTimezone: brokerTimezone || null,
+        assetClass,
       },
       {
         onSuccess: (account) => {
@@ -135,6 +144,7 @@ export default function AddAccountModal({ onClose }: { onClose: () => void }) {
             <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Account Created Date</label>
             <input type="date" max={today} value={createdAt} onChange={(e) => setCreatedAt(e.target.value)} style={inputStyle} />
           </div>
+          <AssetClassField value={assetClass} onChange={setAssetClass} />
           <BrokerTimezoneField value={brokerTimezone} onChange={setBrokerTimezone} />
 
           {formError && (

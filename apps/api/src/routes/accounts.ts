@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { db, tradingAccounts, trades } from "@pipntick/db";
-import type { AccountStatus } from "@pipntick/shared";
-import { ACCOUNT_STATUSES } from "@pipntick/shared";
+import type { AccountStatus, AssetClass } from "@pipntick/shared";
+import { ACCOUNT_STATUSES, ASSET_CLASSES, classChangeMisfits, isAssetClass } from "@pipntick/shared";
 import { getUserId } from "../lib/auth.js";
 import { ensureUser } from "../lib/ensure-account.js";
 
@@ -14,7 +14,10 @@ type CreateAccountBody = {
   createdAt?: string;
   brokerUtcOffsetMinutes?: number | null;
   brokerTimezone?: string | null;
+  assetClass?: AssetClass;
 };
+
+const ASSET_CLASS_ERROR = "assetClass must be futures, forex, stocks or crypto";
 
 /** True for a timezone name this runtime's Intl knows (IANA, e.g. "America/New_York"). */
 export function isValidTimeZone(tz: unknown): tz is string {
@@ -81,6 +84,9 @@ export async function accountRoutes(app: FastifyInstance) {
     if (body.brokerTimezone != null && !isValidTimeZone(body.brokerTimezone)) {
       return reply.code(400).send({ error: "brokerTimezone must be a valid IANA timezone, e.g. America/New_York" });
     }
+    if (body.assetClass !== undefined && !isAssetClass(body.assetClass)) {
+      return reply.code(400).send({ error: ASSET_CLASS_ERROR });
+    }
 
     await ensureUser(userId);
 
@@ -102,6 +108,7 @@ export async function accountRoutes(app: FastifyInstance) {
         isDefault: !currentDefault,
         brokerUtcOffsetMinutes: body.brokerUtcOffsetMinutes ?? null,
         brokerTimezone: body.brokerTimezone ?? null,
+        assetClass: body.assetClass ?? "forex",
         ...(createdAt !== undefined ? { createdAt } : {}),
       })
       .returning();
@@ -142,6 +149,7 @@ export async function accountRoutes(app: FastifyInstance) {
     }
     const detailEdits = [
       body.name, body.broker, body.currency, body.startingBalance, body.createdAt, body.brokerUtcOffsetMinutes, body.brokerTimezone,
+      body.assetClass,
     ];
     if (existing.status === "archived" && status === "archived" && detailEdits.some((v) => v !== undefined)) {
       return reply.code(409).send({ error: "This account is archived — reactivate it to make changes" });
@@ -166,6 +174,21 @@ export async function accountRoutes(app: FastifyInstance) {
       }
 
       createdAt = parsed;
+    }
+
+    // The class can only change while every existing trade still fits the new one (and keeps its
+    // meaning — see classChangeMisfits).
+    if (body.assetClass !== undefined && body.assetClass !== existing.assetClass) {
+      if (!isAssetClass(body.assetClass)) return reply.code(400).send({ error: ASSET_CLASS_ERROR });
+      const target = body.assetClass;
+      const rows = await db.selectDistinct({ symbol: trades.symbol }).from(trades).where(eq(trades.accountId, id));
+      const misfits = classChangeMisfits(rows.map((r) => r.symbol), existing.assetClass, target);
+      if (misfits.length) {
+        return reply.code(409).send({
+          error: `Can't switch to ${ASSET_CLASSES[target].label}: this account has ${misfits.slice(0, 5).join(", ")}${misfits.length > 5 ? "…" : ""} trades`,
+          symbols: misfits,
+        });
+      }
     }
 
     const updated = await db.transaction(async (tx) => {
@@ -200,6 +223,7 @@ export async function accountRoutes(app: FastifyInstance) {
           brokerUtcOffsetMinutes:
             body.brokerUtcOffsetMinutes !== undefined ? body.brokerUtcOffsetMinutes : existing.brokerUtcOffsetMinutes,
           brokerTimezone: body.brokerTimezone !== undefined ? body.brokerTimezone : existing.brokerTimezone,
+          assetClass: body.assetClass ?? existing.assetClass,
           createdAt,
           status,
           isDefault,

@@ -1,4 +1,4 @@
-import type { Candle, CandleInterval } from "@pipntick/shared";
+import type { AssetClass, Candle, CandleInterval } from "@pipntick/shared";
 import { FUTURES_CONTRACTS } from "@pipntick/shared";
 
 // Historical candles for the Trade Review chart, from Yahoo Finance's public chart endpoint.
@@ -26,12 +26,13 @@ export type TickerInfo = { ticker: string; approximate: boolean; note?: string }
  * App symbol -> Yahoo ticker, or null when there's no free source for it. Futures use Yahoo's
  * continuous front-month contract ("ES=F"), so around a rollover candles can be a few ticks off
  * the exact contract traded; spot metals map to their futures and are flagged approximate.
+ * `assetClass` (the account's) settles ticker collisions: "ES" in a stocks account is Eversource.
  */
-export function toYahooTicker(symbol: string): TickerInfo | null {
+export function toYahooTicker(symbol: string, assetClass?: AssetClass): TickerInfo | null {
   const s = symbol.trim().toUpperCase();
   if (!s) return null;
 
-  if (s in FUTURES_CONTRACTS) {
+  if (s in FUTURES_CONTRACTS && (assetClass === undefined || assetClass === "futures")) {
     const root = MICRO_PARENT[s] ?? s;
     return { ticker: `${root}=F`, approximate: false, note: "continuous front-month contract" };
   }

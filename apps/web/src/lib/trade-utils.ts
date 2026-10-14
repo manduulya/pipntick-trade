@@ -1,4 +1,16 @@
-import type { Trade } from "@pipntick/shared";
+import type { AssetClass, Trade } from "@pipntick/shared";
+import { ASSET_CLASSES, inferAssetClass, symbolFitsClass } from "@pipntick/shared";
+
+/**
+ * The unit to print after a size when it differs from the account's column header — only for a
+ * legacy trade whose symbol predates the account's asset class (e.g. "0.5 lot" in a futures
+ * account). Null when the trade fits, so the header ("Contracts", "Lots"…) already says it.
+ */
+export function sizeUnitSuffix(symbol: string, lotSize: number, assetClass: AssetClass): string | null {
+  if (symbolFitsClass(symbol, assetClass)) return null;
+  const spec = ASSET_CLASSES[inferAssetClass(symbol)];
+  return lotSize === 1 ? spec.unit : spec.unitPlural;
+}
 
 export type Period = "daily" | "weekly" | "monthly" | "yearly";
 
@@ -178,6 +190,10 @@ export type JournalRow = {
   isMistake: boolean;
   /** "SL 4200 · TP 4230 / 4245" — whichever planned levels exist; "" when none. */
   levels: string;
+  /** Planned stop, or null when none (the Journal's SL column). */
+  stopLoss: number | null;
+  /** Planned targets, nearest to entry first; empty when none (the Journal's TP column). */
+  takeProfits: number[];
 };
 
 /** Planned stop/targets as one short line, e.g. "SL 4200 · TP 4230 / 4245" (either part optional). */
@@ -209,6 +225,8 @@ export function toJournalRow(t: Trade): JournalRow {
     notes: t.notes ?? "",
     isMistake: t.isMistake ?? false,
     levels: formatLevels(t.stopLoss, t.takeProfits),
+    stopLoss: t.stopLoss != null ? Number(t.stopLoss) : null,
+    takeProfits: (t.takeProfits ?? []).map(Number),
   };
 }
 

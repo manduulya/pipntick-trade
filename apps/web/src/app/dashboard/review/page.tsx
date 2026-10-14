@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { CandleInterval, Trade } from "@pipntick/shared";
-import { CANDLE_INTERVALS, plannedRewardRisk } from "@pipntick/shared";
+import { CANDLE_INTERVALS, plannedRewardRisk, symbolFitsClass } from "@pipntick/shared";
 import { useCandles, useTrades } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
 import { ApiError } from "../../../lib/api";
@@ -64,7 +64,16 @@ function ReviewPageInner() {
   const instants = selected ? tradeInstants(selected, selectedAccount) : null;
   const candleParams =
     selected && instants && !Number.isNaN(instants.entry.getTime())
-      ? { symbol: selected.symbol, entry: instants.entry.toISOString(), exit: instants.exit?.toISOString(), interval }
+      ? {
+          symbol: selected.symbol,
+          entry: instants.entry.toISOString(),
+          exit: instants.exit?.toISOString(),
+          interval,
+          // The account's class picks the right data for colliding tickers; a legacy trade outside
+          // the class falls back to guessing from the symbol.
+          assetClass:
+            selectedAccount && symbolFitsClass(selected.symbol, selectedAccount.assetClass) ? selectedAccount.assetClass : undefined,
+        }
       : null;
   const candles = useCandles(candleParams);
   const markers = useMemo(

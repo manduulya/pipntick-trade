@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { getContractSize, getFuturesContract, isReadOnlyAccount, isRuleMet, plannedRewardRisk } from "../index";
+import {
+  classChangeMisfits,
+  getContractSize,
+  getFuturesContract,
+  inferAssetClass,
+  isAssetClass,
+  isReadOnlyAccount,
+  isRuleMet,
+  plannedRewardRisk,
+  symbolFitsClass,
+} from "../index";
 
 describe("plannedRewardRisk", () => {
   it("is target distance over stop distance for a long or short", () => {
@@ -83,5 +93,54 @@ describe("getContractSize", () => {
   it("does not treat a 6-letter symbol without a slash as forex", () => {
     // Only the explicit AAA/BBB shape counts — a bare "EURUSD" falls through to the default.
     expect(getContractSize("EURUSD")).toBe(1);
+  });
+
+  it("lets the account's asset class settle ticker collisions", () => {
+    expect(getContractSize("ES", "stocks")).toBe(1); // Eversource shares, not the $50 E-mini
+    expect(getContractSize("ES", "futures")).toBe(50);
+    expect(getContractSize("BTC/USD", "crypto")).toBe(1);
+    expect(getContractSize("XAU/USD", "forex")).toBe(100);
+    expect(getContractSize("EUR/USD", "forex")).toBe(100000);
+  });
+});
+
+describe("asset classes", () => {
+  it("fits futures roots, curated forex/CFDs and crypto, and plain stock tickers", () => {
+    expect(symbolFitsClass("MES", "futures")).toBe(true);
+    expect(symbolFitsClass("EUR/USD", "futures")).toBe(false);
+    expect(symbolFitsClass("EUR/USD", "forex")).toBe(true);
+    expect(symbolFitsClass("eurusd", "forex")).toBe(true);
+    expect(symbolFitsClass("XAU/USD", "forex")).toBe(true);
+    expect(symbolFitsClass("NAS100", "forex")).toBe(true);
+    expect(symbolFitsClass("BTC/USD", "forex")).toBe(false);
+    expect(symbolFitsClass("BTC/USD", "crypto")).toBe(true);
+    expect(symbolFitsClass("AAPL", "stocks")).toBe(true);
+    expect(symbolFitsClass("BRK.B", "stocks")).toBe(true);
+    expect(symbolFitsClass("ES", "stocks")).toBe(true); // collision: a valid stock in a stocks account
+    expect(symbolFitsClass("US30", "stocks")).toBe(false); // a curated CFD
+    expect(symbolFitsClass("EUR/USD", "stocks")).toBe(false);
+    expect(symbolFitsClass("", "stocks")).toBe(false);
+  });
+
+  it("guesses a legacy symbol's class with futures winning collisions", () => {
+    expect(inferAssetClass("ES")).toBe("futures");
+    expect(inferAssetClass("XAU/USD")).toBe("forex");
+    expect(inferAssetClass("SOL/USD")).toBe("crypto");
+    expect(inferAssetClass("AAPL")).toBe("stocks");
+  });
+
+  it("blocks a class change for trades entered as the current class or not fitting the new one", () => {
+    expect(classChangeMisfits(["MES", "MNQ", "MES"], "futures", "stocks")).toEqual(["MES", "MNQ"]); // contracts ≠ shares
+    expect(classChangeMisfits(["EUR/USD"], "forex", "futures")).toEqual(["EUR/USD"]);
+    expect(classChangeMisfits([], "forex", "crypto")).toEqual([]);
+    // A legacy misfit that fits the new class carries over.
+    expect(classChangeMisfits(["MES"], "forex", "futures")).toEqual([]);
+    expect(classChangeMisfits(["MES"], "futures", "futures")).toEqual([]);
+  });
+
+  it("validates class names", () => {
+    expect(isAssetClass("futures")).toBe(true);
+    expect(isAssetClass("options")).toBe(false);
+    expect(isAssetClass(undefined)).toBe(false);
   });
 });

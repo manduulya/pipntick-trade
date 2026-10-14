@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { and, desc, eq } from "drizzle-orm";
 import { db, tradingAccounts, trades } from "@pipntick/db";
-import { MAX_TAKE_PROFITS, getContractSize } from "@pipntick/shared";
+import { MAX_TAKE_PROFITS, getContractSize, type AssetClass } from "@pipntick/shared";
 import { getUserId } from "../lib/auth.js";
 import { resolveAccount, resolveAccountId } from "../lib/resolve-account.js";
-import { ARCHIVED_ACCOUNT_ERROR, isArchived } from "../lib/account-guard.js";
+import { ARCHIVED_ACCOUNT_ERROR, isArchived, symbolClassError } from "../lib/account-guard.js";
 
 type TradeDirection = "long" | "short";
 type TradeSource = "manual" | "screenshot" | "mt4";
@@ -86,9 +86,10 @@ export function computePnl(
   symbol: string,
   swap: number = 0,
   commission: number = 0,
+  assetClass?: AssetClass,
 ) {
   const diff = direction === "long" ? exitPrice - entryPrice : entryPrice - exitPrice;
-  return diff * lotSize * getContractSize(symbol) + swap + commission;
+  return diff * lotSize * getContractSize(symbol, assetClass) + swap + commission;
 }
 
 export async function tradeRoutes(app: FastifyInstance) {
@@ -131,6 +132,8 @@ export async function tradeRoutes(app: FastifyInstance) {
     if (!account) return reply.code(404).send({ error: "Account not found" });
     if (isArchived(account.status)) return reply.code(409).send({ error: ARCHIVED_ACCOUNT_ERROR });
     const accountId = account.id;
+    const classError = symbolClassError(body.symbol, account.assetClass);
+    if (classError) return reply.code(400).send({ error: classError });
 
     const exitPrice = optNum(body.exitPrice);
     const swap = optNum(body.swap);
@@ -140,7 +143,7 @@ export async function tradeRoutes(app: FastifyInstance) {
     const pnl = manualPnl
       ? overridePnl
       : exitPrice !== undefined
-        ? computePnl(body.direction, body.entryPrice, exitPrice, body.lotSize, body.symbol, swap, commission)
+        ? computePnl(body.direction, body.entryPrice, exitPrice, body.lotSize, body.symbol, swap, commission, account.assetClass)
         : null;
 
     const [trade] = await db
@@ -180,7 +183,7 @@ export async function tradeRoutes(app: FastifyInstance) {
     const body = request.body as UpdateTradeBody;
 
     const [existing] = await db
-      .select({ trade: trades, accountStatus: tradingAccounts.status })
+      .select({ trade: trades, accountStatus: tradingAccounts.status, assetClass: tradingAccounts.assetClass })
       .from(trades)
       .innerJoin(tradingAccounts, eq(trades.accountId, tradingAccounts.id))
       .where(and(eq(trades.id, id), eq(tradingAccounts.userId, userId)));
@@ -188,6 +191,11 @@ export async function tradeRoutes(app: FastifyInstance) {
     if (!existing) return reply.code(404).send({ error: "Trade not found" });
     if (isArchived(existing.accountStatus)) return reply.code(409).send({ error: ARCHIVED_ACCOUNT_ERROR });
     const current = existing.trade;
+    // Only a changed symbol is checked, so a legacy trade outside the class stays editable.
+    if (body.symbol !== undefined && body.symbol !== current.symbol) {
+      const classError = symbolClassError(body.symbol, existing.assetClass);
+      if (classError) return reply.code(400).send({ error: classError });
+    }
 
     // Per-field merge rule for the clearable optionals: key absent in the body -> keep what's
     // stored; `null` -> clear it; a value -> set it. (`??` can't express this — it treats an
@@ -244,7 +252,7 @@ export async function tradeRoutes(app: FastifyInstance) {
         manualPnl && body.pnl === undefined
           ? currentNum(current.pnl) ?? null
           : exitPrice !== undefined
-            ? computePnl(direction, entryPrice, exitPrice, lotSize, symbol, swap, commission)
+            ? computePnl(direction, entryPrice, exitPrice, lotSize, symbol, swap, commission, existing.assetClass)
             : null;
     }
 

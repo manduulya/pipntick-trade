@@ -532,6 +532,47 @@ describe("PATCH /api/trades/:id", () => {
   });
 });
 
+describe("account asset class", () => {
+  const post = (symbol: string, extra: Record<string, unknown> = {}) => ({
+    method: "POST" as const,
+    url: "/api/trades",
+    payload: { symbol, direction: "long", entryPrice: 10, exitPrice: 12, lotSize: 3, entryTime: "2026-01-01T10:00:00.000Z", ...extra },
+  });
+  const legacyTrade = {
+    id: "t1", symbol: "EUR/USD", direction: "long", entryPrice: "1.1", exitPrice: null, lotSize: "1",
+    swap: null, commission: null, entryTime: new Date("2026-03-15T10:00:00.000Z"), exitTime: null,
+    session: "London", notes: null, screenshotUrl: null, takeProfits: [],
+  };
+
+  it("rejects a symbol outside the account's class", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(getDefaultAccount).mockResolvedValue({ ...FAKE_ACCOUNT, status: "active", assetClass: "futures" } as any);
+    const app = await buildApp();
+    const res = await app.inject(post("EUR/USD"));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/futures/i);
+  });
+
+  it("sizes a colliding ticker by the account's class (ES as a stock = ×1)", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(getDefaultAccount).mockResolvedValue({ ...FAKE_ACCOUNT, status: "active", assetClass: "stocks" } as any);
+    setInsertResult([{ id: "t1" }]);
+    const app = await buildApp();
+    expect((await app.inject(post("ES"))).statusCode).toBe(201);
+    expect(Number((getLastInsertValues() as { pnl: string }).pnl)).toBe(6); // (12-10) × 3 shares
+  });
+
+  it("keeps a legacy trade editable but checks a changed symbol", async () => {
+    setSelectResult([{ trade: legacyTrade, accountStatus: "active", assetClass: "futures" }]);
+    const app = await buildApp();
+    // Untouched legacy symbol: fine.
+    expect((await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { notes: "x" } })).statusCode).toBe(200);
+    // Switching to another out-of-class symbol: rejected.
+    const res = await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { symbol: "GBP/USD" } });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
 describe("archived accounts", () => {
   it("refuses to add a trade to an archived account", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

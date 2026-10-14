@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import type { CreateTradeInput, ParsedTradeScreenshot, Trade } from "@pipntick/shared";
-import { MAX_TAKE_PROFITS, getContractSize, getFuturesContract, plannedRewardRisk } from "@pipntick/shared";
+import { ASSET_CLASSES, MAX_TAKE_PROFITS, getContractSize, getFuturesContract, plannedRewardRisk } from "@pipntick/shared";
 import { useCreateTrade, useUpdateTrade } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
 import { ApiError } from "../../../lib/api";
 import { accountWallClockToUtc, accountZoneLabel, utcToAccountWallClock } from "../../../lib/time-format";
 import { detectSession, toDatetimeLocal } from "../../../lib/trade-utils";
 import InstrumentInput from "../InstrumentInput";
-import { findInstrument, loadStockInstruments } from "../../../lib/instruments";
+import { ensureInstruments, findInstrument } from "../../../lib/instruments";
 import DateTimePicker from "./DateTimePicker";
 
 // Shared by Dashboard's inline quick-add panel and Journal's Add/Edit modal — both wrap this in
@@ -188,9 +188,12 @@ export function TradeForm({
 
   const missingInputStyle = { ...inputStyle, border: "1px solid var(--color-danger)" };
 
-  // Futures are sized in whole contracts and P&L scales by the contract's point value (see
-  // FUTURES_CONTRACTS in @pipntick/shared), so relabel the size field and show what a point is worth.
-  const futures = getFuturesContract(symbol);
+  // The account's asset class decides which instruments are offered, the size unit (contracts /
+  // lots / shares / coins) and P&L sizing. Futures also show what a point is worth (see
+  // FUTURES_CONTRACTS in @pipntick/shared).
+  const assetClass = selectedAccount?.assetClass ?? "forex";
+  const sizeSpec = ASSET_CLASSES[assetClass];
+  const futures = assetClass === "futures" ? getFuturesContract(symbol) : null;
 
   // Stop / targets: soft side-of-entry hints (never blocking — breakeven/trailing stops and odd
   // targets are the trader's call) and the planned R:R once entry, stop and a target are set.
@@ -210,7 +213,7 @@ export function TradeForm({
     entryPrice !== "" && exitPrice !== "" && lotSize !== ""
       ? (direction === "long" ? Number(exitPrice) - Number(entryPrice) : Number(entryPrice) - Number(exitPrice)) *
           Number(lotSize) *
-          getContractSize(symbol) +
+          getContractSize(symbol, assetClass) +
         (swap !== "" ? Number(swap) : 0) +
         (commission !== "" ? Number(commission) : 0)
       : null;
@@ -243,10 +246,12 @@ export function TradeForm({
       return;
     }
 
-    // Only listed instruments can be traded — free text would silently get the wrong contract size.
-    // Wait for the lazily-fetched stock list so a valid stock ticker isn't rejected mid-load.
-    await loadStockInstruments();
-    const instrument = findInstrument(symbol);
+    // Only listed instruments of the account's class can be traded — free text would silently get
+    // the wrong contract size. Wait for a stocks account's lazily-fetched list so a valid ticker
+    // isn't rejected mid-load. Editing a legacy trade whose symbol predates the class keeps it.
+    await ensureInstruments(assetClass);
+    const keepLegacy = isEdit && symbol === trade.symbol;
+    const instrument = keepLegacy ? { symbol, name: symbol } : findInstrument(symbol, assetClass);
     if (!instrument) {
       setUnlistedSymbol(true);
       return;
@@ -330,12 +335,13 @@ export function TradeForm({
     <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
       <InstrumentInput
         value={symbol}
+        assetClass={assetClass}
         onChange={(v) => { setSymbol(v); clearMissing("Instrument"); setUnlistedSymbol(false); }}
         style={missingFields.includes("Instrument") || unlistedSymbol ? missingInputStyle : inputStyle}
       />
       {unlistedSymbol && (
         <p className="text-[10px] -mt-2" style={{ color: "var(--color-danger)" }}>
-          &ldquo;{symbol}&rdquo; isn&rsquo;t a listed instrument — pick one from the suggestions.
+          &ldquo;{symbol}&rdquo; isn&rsquo;t a listed {sizeSpec.label.toLowerCase()} instrument — pick one from the suggestions.
         </p>
       )}
       {futures && (
@@ -439,7 +445,7 @@ export function TradeForm({
         <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Session</span>
         <span className="text-[11px] font-semibold" style={{ color: session ? "var(--color-green-primary)" : "var(--color-text-disabled)" }}>{session || "— enter entry time"}</span>
       </div>
-      <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>{futures ? "Contracts" : "Lot Size"}</label><input type="number" step={futures ? 1 : "any"} min={futures ? 1 : undefined} placeholder={futures ? "1" : "0.01"} value={lotSize} onChange={(e) => { setLotSize(e.target.value); clearMissing("Lot Size"); }} style={missingFields.includes("Lot Size") ? missingInputStyle : inputStyle} /></div>
+      <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>{sizeSpec.sizeLabel}</label><input type="number" step={sizeSpec.step} min={sizeSpec.min} placeholder={sizeSpec.placeholder} value={lotSize} onChange={(e) => { setLotSize(e.target.value); clearMissing("Lot Size"); }} style={missingFields.includes("Lot Size") ? missingInputStyle : inputStyle} /></div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Swap</label><input type="number" step="any" placeholder="0.00 (optional)" value={swap} onChange={(e) => setSwap(e.target.value)} style={inputStyle} /></div>
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Commission / Charges</label><input type="number" step="any" placeholder="0.00 (optional)" value={commission} onChange={(e) => setCommission(e.target.value)} style={inputStyle} /></div>
@@ -500,7 +506,7 @@ export function TradeForm({
       </div>
       {missingFields.length > 0 && (
         <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>
-          Missing required field{missingFields.length > 1 ? "s" : ""}: {missingFields.map((f) => (f === "Lot Size" && futures ? "Contracts" : f)).join(", ")}
+          Missing required field{missingFields.length > 1 ? "s" : ""}: {missingFields.map((f) => (f === "Lot Size" ? sizeSpec.sizeLabel : f)).join(", ")}
         </p>
       )}
       {dateError && (

@@ -2,12 +2,14 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import type { Trade } from "@pipntick/shared";
+import { ASSET_CLASSES } from "@pipntick/shared";
 import { useTrades } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
 import {
   inDateFilter,
   periodLabel,
   periodOffsetFor,
+  sizeUnitSuffix,
   toJournalRow,
   type JournalDateFilter,
   type JournalRow,
@@ -179,6 +181,8 @@ const COLS: { label: string; key: SortKey | null }[] = [
   { label: "Direction",  key: "direction"  },
   { label: "Entry",      key: null         },
   { label: "Exit",       key: null         },
+  { label: "SL",         key: null         },
+  { label: "TP",         key: null         },
   { label: "Lot",        key: null         },
   { label: "Duration",   key: "duration"   },
   { label: "Session",    key: null         },
@@ -194,6 +198,8 @@ export default function JournalPage() {
   const hoverOverlay = theme === "light" ? "0,0,0" : "255,255,255";
   const { data, isLoading, isError, error } = useTrades();
   const { accounts, readOnly, selectedAccount } = useSelectedAccount();
+  const assetClass = selectedAccount?.assetClass ?? "forex";
+  const sizeSpec = ASSET_CLASSES[assetClass];
   const { timeFormat } = useTimeFormat();
   const [search, setSearch]     = useState("");
   const [filter, setFilter]     = useState<"all" | "long" | "short" | "win" | "loss" | "mistakes">("all");
@@ -423,10 +429,13 @@ export default function JournalPage() {
             and this scrolls horizontally instead of cramming 11 columns of trading data
             unreadably — sticky header is unaffected (it's scoped to the vertical-scroll axis). */}
         <div className="overflow-y-auto overflow-x-auto h-full">
-          <table className="w-full min-w-[900px] text-xs border-collapse">
+          <table className="w-full min-w-[1040px] text-xs border-collapse">
             <thead className="sticky top-0" style={{ backgroundColor: "var(--color-bg-surface)", borderBottom: "1px solid var(--color-border)" }}>
               <tr>
-                {COLS.map(({ label, key }) => (
+                {COLS.map(({ label: col, key }) => {
+                  // The size column is named for the account's unit: Contracts, Lots, Shares, Coins.
+                  const label = col === "Lot" ? sizeSpec.sizeLabel : col;
+                  return (
                   <th
                     key={label}
                     onClick={() => handleSort(key)}
@@ -452,15 +461,16 @@ export default function JournalPage() {
                       )}
                     </span>
                   </th>
-                ))}
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={11} className="px-4 py-12 text-center text-xs" style={{ color: "var(--color-text-muted)" }}>Loading trades...</td></tr>
+                <tr><td colSpan={COLS.length} className="px-4 py-12 text-center text-xs" style={{ color: "var(--color-text-muted)" }}>Loading trades...</td></tr>
               )}
               {isError && (
-                <tr><td colSpan={11} className="px-4 py-12 text-center text-xs" style={{ color: "var(--color-danger)" }}>
+                <tr><td colSpan={COLS.length} className="px-4 py-12 text-center text-xs" style={{ color: "var(--color-danger)" }}>
                   {error instanceof ApiError ? error.message : "Failed to load trades."}
                 </td></tr>
               )}
@@ -496,7 +506,27 @@ export default function JournalPage() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.entryPrice}</td>
                       <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.exitPrice ?? "—"}</td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.lotSize}</td>
+                      {/* Planned levels — both optional. Up to two targets inline, the rest as "+N"
+                          (all of them in the tooltip). */}
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: t.stopLoss !== null ? "var(--color-danger)" : "var(--color-text-muted)" }}>
+                        {t.stopLoss ?? "—"}
+                      </td>
+                      <td
+                        className="px-4 py-3 whitespace-nowrap"
+                        style={{ color: t.takeProfits.length ? "var(--color-green-neon)" : "var(--color-text-muted)" }}
+                        title={t.takeProfits.length > 2 ? t.takeProfits.map((p, i) => `TP${i + 1} ${p}`).join("\n") : undefined}
+                      >
+                        {t.takeProfits.length ? t.takeProfits.slice(0, 2).join(" / ") : "—"}
+                        {t.takeProfits.length > 2 && (
+                          <span className="ml-1 text-[10px]" style={{ color: "var(--color-text-muted)" }}>+{t.takeProfits.length - 2}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>
+                        {t.lotSize}
+                        {sizeUnitSuffix(t.instrument, t.lotSize, assetClass) && (
+                          <span className="ml-1 text-[10px]" style={{ color: "var(--color-text-muted)" }}>{sizeUnitSuffix(t.instrument, t.lotSize, assetClass)}</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.duration}</td>
                       <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-text-secondary)" }}>{t.session}</td>
                       <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: t.pnl === null ? "var(--color-text-muted)" : isWin ? "var(--color-green-neon)" : "var(--color-danger)" }}>
@@ -509,16 +539,13 @@ export default function JournalPage() {
                     </tr>
                     {isOpen && (
                       <tr style={{ backgroundColor: "rgba(123,193,59,0.03)", borderBottom: "1px solid rgba(26,45,74,0.5)" }}>
-                        <td colSpan={11} className="px-6 py-3">
+                        <td colSpan={COLS.length} className="px-6 py-3">
                           <div className="flex items-center justify-between gap-4">
                             <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
                               <span className="font-semibold" style={{ color: t.isMistake ? "var(--color-danger)" : "var(--color-text-primary)" }}>
                                 {t.isMistake ? "Mistake: " : "Notes: "}
                               </span>
                               {t.notes || (t.isMistake ? "No description recorded." : "No notes for this trade.")}
-                              {t.levels && (
-                                <span className="block mt-1 text-[11px]" style={{ color: "var(--color-text-muted)" }}>{t.levels}</span>
-                              )}
                             </p>
                             <div className="shrink-0 flex items-center gap-2">
                               <ViewOnChartButton tradeId={t.id} />
@@ -564,7 +591,7 @@ export default function JournalPage() {
               })}
               {!isLoading && !isError && rows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-xs" style={{ color: "var(--color-text-muted)" }}>
+                  <td colSpan={COLS.length} className="px-4 py-12 text-center text-xs" style={{ color: "var(--color-text-muted)" }}>
                     No trades match your filters.
                   </td>
                 </tr>
