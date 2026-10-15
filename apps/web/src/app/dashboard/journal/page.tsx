@@ -66,10 +66,16 @@ function AnimatedContent({ method, children }: { method: EntryMethod; children: 
   const innerRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(undefined);
 
+  // Track the content's height continuously, not just on tab switch: the form grows after it opens
+  // (futures hint, planned R:R line, "+ Add target" rows, validation messages), and a stale pinned
+  // height with overflow:hidden clips the bottom — including the submit button — out of reach.
   useEffect(() => {
-    if (innerRef.current) {
-      setHeight(innerRef.current.scrollHeight);
-    }
+    const el = innerRef.current;
+    if (!el) return;
+    setHeight(el.scrollHeight);
+    const observer = new ResizeObserver(() => setHeight(el.scrollHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [method]);
 
   return (
@@ -160,8 +166,8 @@ function AddTradeModal({ trade, onClose, onSaved }: { trade?: Trade; onClose: ()
 
         {/* Scroll region — bounds AnimatedContent against the panel's maxHeight:90vh via normal
             flex remaining-space distribution, so tall content scrolls instead of silently
-            clipping. AnimatedContent itself is untouched: its scrollHeight measurement is
-            unaffected by an ancestor's overflow property. */}
+            clipping. AnimatedContent's own height follows its content (ResizeObserver), and its
+            scrollHeight measurement is unaffected by an ancestor's overflow property. */}
         <div className="flex-1 min-h-0 overflow-y-auto p-5">
         <AnimatedContent method={isEdit ? "manual" : method}>
         <div className="flex flex-col gap-3">
