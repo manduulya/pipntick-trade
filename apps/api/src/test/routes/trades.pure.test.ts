@@ -36,6 +36,13 @@ describe("computePnl", () => {
     expect(computePnl("long", 1.1, 1.105, 1, "EUR/USD", -2, -1.5)).toBeCloseTo(496.5);
   });
 
+  it("always deducts commission, typed with or without a minus", () => {
+    expect(computePnl("long", 1.1, 1.105, 1, "EUR/USD", 0, 1.5)).toBeCloseTo(498.5);
+    expect(computePnl("long", 1.1, 1.105, 1, "EUR/USD", 0, -1.5)).toBeCloseTo(498.5);
+    // The reported bug: MNQ long 29908 -> 29858.25, 1 contract ($2/pt), $1.20 commission.
+    expect(computePnl("long", 29908, 29858.25, 1, "MNQ", 0, 1.2, "futures")).toBeCloseTo(-100.7);
+  });
+
   it("treats a positive swap as a credit", () => {
     expect(computePnl("long", 1.1, 1.105, 1, "EUR/USD", 3, 0)).toBeCloseTo(503);
   });

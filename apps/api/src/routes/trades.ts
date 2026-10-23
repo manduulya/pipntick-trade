@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { and, desc, eq } from "drizzle-orm";
 import { db, tradingAccounts, trades } from "@pipntick/db";
-import { MAX_TAKE_PROFITS, getContractSize, type AssetClass } from "@pipntick/shared";
+import { MAX_TAKE_PROFITS, commissionAsCost, getContractSize, type AssetClass } from "@pipntick/shared";
 import { getUserId } from "../lib/auth.js";
 import { resolveAccount, resolveAccountId } from "../lib/resolve-account.js";
 import { ARCHIVED_ACCOUNT_ERROR, isArchived, symbolClassError } from "../lib/account-guard.js";
@@ -71,6 +71,11 @@ function optNum(v: number | null | undefined): number | undefined {
   return v == null ? undefined : v;
 }
 
+// Commission is always stored and applied as a cost (negative), whatever sign was sent.
+function optCommission(v: number | null | undefined): number | undefined {
+  return v == null ? undefined : commissionAsCost(v);
+}
+
 // Grace window for the "not in the future" checks below. The web client stores trade times as
 // broker-server wall-clock digits (labeled UTC) and does the precise, offset-aware future check
 // itself; this endpoint doesn't know the account's broker timezone, so its own check has to
@@ -89,7 +94,7 @@ export function computePnl(
   assetClass?: AssetClass,
 ) {
   const diff = direction === "long" ? exitPrice - entryPrice : entryPrice - exitPrice;
-  return diff * lotSize * getContractSize(symbol, assetClass) + swap + commission;
+  return diff * lotSize * getContractSize(symbol, assetClass) + swap + commissionAsCost(commission);
 }
 
 export async function tradeRoutes(app: FastifyInstance) {
@@ -137,7 +142,7 @@ export async function tradeRoutes(app: FastifyInstance) {
 
     const exitPrice = optNum(body.exitPrice);
     const swap = optNum(body.swap);
-    const commission = optNum(body.commission);
+    const commission = optCommission(body.commission);
     const overridePnl = optNum(body.pnl);
     const manualPnl = overridePnl !== undefined;
     const pnl = manualPnl
@@ -211,7 +216,7 @@ export async function tradeRoutes(app: FastifyInstance) {
       body.exitPrice === undefined ? currentNum(current.exitPrice) : optNum(body.exitPrice);
     const swap = body.swap === undefined ? currentNum(current.swap) : optNum(body.swap);
     const commission =
-      body.commission === undefined ? currentNum(current.commission) : optNum(body.commission);
+      body.commission === undefined ? optCommission(currentNum(current.commission)) : optCommission(body.commission);
     const notes = body.notes === undefined ? current.notes : body.notes;
     if (body.isMistake !== undefined && typeof body.isMistake !== "boolean") {
       return reply.code(400).send({ error: "isMistake must be a boolean" });

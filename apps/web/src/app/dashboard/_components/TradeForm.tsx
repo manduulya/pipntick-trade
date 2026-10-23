@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { CreateTradeInput, ParsedTradeScreenshot, Trade } from "@pipntick/shared";
-import { ASSET_CLASSES, MAX_TAKE_PROFITS, getContractSize, getFuturesContract, plannedRewardRisk } from "@pipntick/shared";
+import { ASSET_CLASSES, MAX_TAKE_PROFITS, commissionAsCost, getContractSize, getFuturesContract, plannedRewardRisk } from "@pipntick/shared";
 import { useCreateTrade, useUpdateTrade } from "../../../lib/hooks";
 import { useSelectedAccount } from "../../../lib/account-context";
 import { ApiError } from "../../../lib/api";
@@ -215,7 +215,8 @@ export function TradeForm({
           Number(lotSize) *
           getContractSize(symbol, assetClass) +
         (swap !== "" ? Number(swap) : 0) +
-        (commission !== "" ? Number(commission) : 0)
+        // Commission is always a cost, typed with or without a minus (same rule as the API).
+        (commission !== "" ? commissionAsCost(Number(commission)) : 0)
       : null;
 
   function resetFields() {
@@ -448,7 +449,7 @@ export function TradeForm({
       <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>{sizeSpec.sizeLabel}</label><input type="number" step={sizeSpec.step} min={sizeSpec.min} placeholder={sizeSpec.placeholder} value={lotSize} onChange={(e) => { setLotSize(e.target.value); clearMissing("Lot Size"); }} style={missingFields.includes("Lot Size") ? missingInputStyle : inputStyle} /></div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Swap</label><input type="number" step="any" placeholder="0.00 (optional)" value={swap} onChange={(e) => setSwap(e.target.value)} style={inputStyle} /></div>
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Commission / Charges</label><input type="number" step="any" placeholder="0.00 (optional)" value={commission} onChange={(e) => setCommission(e.target.value)} style={inputStyle} /></div>
+        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Commission / Charges <span style={{ color: "var(--color-text-disabled)" }}>· always deducted</span></label><input type="number" step="any" placeholder="0.00 (optional)" value={commission} onChange={(e) => setCommission(e.target.value)} style={inputStyle} /></div>
       </div>
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
@@ -464,7 +465,7 @@ export function TradeForm({
           <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
             <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Auto-calculated</span>
             <span className="text-[11px] font-semibold" style={{ color: computedPnl === null ? "var(--color-text-disabled)" : computedPnl >= 0 ? "var(--color-green-primary)" : "var(--color-danger)" }}>
-              {computedPnl === null ? "— enter exit price" : `${computedPnl >= 0 ? "+" : ""}$${Math.abs(computedPnl).toFixed(2)}`}
+              {computedPnl === null ? "— enter exit price" : `${computedPnl >= 0 ? "+" : "-"}$${Math.abs(computedPnl).toFixed(2)}`}
             </span>
           </div>
         )}

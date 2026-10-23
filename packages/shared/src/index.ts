@@ -317,6 +317,15 @@ export interface CreateTradeInput {
   takeProfits?: number[];
 }
 
+/**
+ * A commission/charge is always a cost, whatever sign the trader typed: 1.20 and -1.20 both mean
+ * "$1.20 deducted". Returned negative (0 stays 0), matching the signed-fees convention where
+ * negative = cost. Swap is deliberately not normalized — brokers can pay swap as well as charge it.
+ */
+export function commissionAsCost(value: number): number {
+  return value === 0 ? 0 : -Math.abs(value);
+}
+
 export const MAX_TAKE_PROFITS = 5;
 
 /**
