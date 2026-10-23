@@ -562,6 +562,18 @@ describe("account asset class", () => {
     expect(Number((getLastInsertValues() as { pnl: string }).pnl)).toBe(6); // (12-10) × 3 shares
   });
 
+  it("stores a positive commission as a cost and deducts it from P&L", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(getDefaultAccount).mockResolvedValue({ ...FAKE_ACCOUNT, status: "active", assetClass: "futures" } as any);
+    setInsertResult([{ id: "t1" }]);
+    const app = await buildApp();
+    const res = await app.inject(post("MNQ", { entryPrice: 29908, exitPrice: 29858.25, lotSize: 1, commission: 1.2 }));
+    expect(res.statusCode).toBe(201);
+    const values = getLastInsertValues() as { pnl: string; commission: string };
+    expect(Number(values.commission)).toBe(-1.2);
+    expect(Number(values.pnl)).toBeCloseTo(-100.7);
+  });
+
   it("keeps a legacy trade editable but checks a changed symbol", async () => {
     setSelectResult([{ trade: legacyTrade, accountStatus: "active", assetClass: "futures" }]);
     const app = await buildApp();

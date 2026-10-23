@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classChangeMisfits,
+  commissionAsCost,
   getContractSize,
   getFuturesContract,
   inferAssetClass,
@@ -22,6 +23,14 @@ describe("plannedRewardRisk", () => {
     expect(plannedRewardRisk(4210, 4200, undefined)).toBeNull();
     expect(plannedRewardRisk(4210, 4215, 4234)).toBeNull(); // stop above a long's entry (breakeven/trail)
     expect(plannedRewardRisk(4210, 4210, 4234)).toBeNull(); // zero risk
+  });
+});
+
+describe("commissionAsCost", () => {
+  it("is always a negative cost, whatever sign was typed", () => {
+    expect(commissionAsCost(1.2)).toBe(-1.2);
+    expect(commissionAsCost(-1.2)).toBe(-1.2);
+    expect(commissionAsCost(0)).toBe(0);
   });
 });
 

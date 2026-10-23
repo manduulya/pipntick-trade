@@ -50,6 +50,13 @@
       "when": 1792002326261,
       "tag": "0006_account_asset_class",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792714229330,
+      "tag": "0007_commission_always_cost",
+      "breakpoints": true
     }
   ]
 }
