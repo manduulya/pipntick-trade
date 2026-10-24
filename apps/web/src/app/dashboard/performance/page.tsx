@@ -253,8 +253,9 @@ export default function PerformancePage() {
       </div>
 
       {/* Period stats — fixed portfolio value first, then period-driven */}
-      {/* 10 cards: 2 rows of 5 at lg (row 1 = outcome + edge, row 2 = per-trade + discipline). */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
+      {/* 12 cards: 2 rows of 6 at lg (row 1 = outcome + edge + best day, row 2 = per-trade +
+          discipline + worst day). */}
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 shrink-0">
         {/* Portfolio value — always fixed */}
         <div className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}>
           <p className="text-xs font-medium mb-1" style={{ color: "var(--color-text-muted)" }}>Portfolio Value</p>
@@ -267,11 +268,13 @@ export default function PerformancePage() {
           { label: "Win Rate",     value: ps.winRate,       sub: ps.winRateSub,            color: "var(--color-green-primary)" },
           { label: "Profit Factor",value: ps.profitFactor,  sub: "gross profit / loss",   color: "var(--color-text-primary)" },
           { label: "Avg Reward:Risk", value: ps.rr,         sub: ps.rrSub,                 color: "var(--color-text-primary)" },
+          { label: "Best Day",     value: ps.bestDay,       sub: ps.bestDaySub,            color: ps.bestDay === "—" ? "var(--color-text-secondary)" : ps.bestDayPos ? "var(--color-green-primary)" : "var(--color-danger)" },
           { label: "Avg Win",      value: ps.avgWin,        sub: "per winning trade",      color: "var(--color-green-primary)" },
           { label: "Avg Loss",     value: ps.avgLoss,       sub: "per losing trade",       color: "var(--color-danger)" },
           { label: "Cost of Mistakes", value: ps.mistakeCost, sub: ps.mistakeSub,          color: ps.mistakeCostZero ? "var(--color-text-secondary)" : "var(--color-danger)" },
           { label: "Total Trades",       value: ps.trades,          sub: ps.tradesSub,          color: "var(--color-text-primary)" },
           { label: "Avg Trade Duration", value: ps.avgDuration,     sub: ps.avgDurationSub,     color: "var(--color-text-primary)" },
+          { label: "Worst Day",          value: ps.worstDay,        sub: ps.worstDaySub,        color: ps.worstDay === "—" ? "var(--color-text-secondary)" : ps.worstDayPos ? "var(--color-green-primary)" : "var(--color-danger)" },
         ].map((s) => (
           <div key={s.label} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}>
             <p className="text-xs font-medium mb-1" style={{ color: "var(--color-text-muted)" }}>{s.label}</p>

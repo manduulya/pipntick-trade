@@ -10,6 +10,7 @@ import { TradeForm } from "./TradeForm";
 import DeleteTradeModal from "./DeleteTradeModal";
 import MistakePill from "./MistakePill";
 import ViewOnChartButton from "./ViewOnChartButton";
+import TradeScreenshots from "./TradeScreenshots";
 import Toast from "../Toast";
 import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
 import { useSelectedAccount } from "../../../lib/account-context";
@@ -151,6 +152,12 @@ export default function DayTradesModal({
                     </p>
                   )}
 
+                  {(row.preTradeUrl || row.postTradeUrl) && (
+                    <div className="mb-2">
+                      <TradeScreenshots preTradeUrl={row.preTradeUrl} postTradeUrl={row.postTradeUrl} />
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2">
                     <ViewOnChartButton tradeId={t.id} />
                     {!readOnly && <>
@@ -158,7 +165,7 @@ export default function DayTradesModal({
                       type="button"
                       onClick={() => setEditingTrade(t)}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-opacity hover:opacity-80"
-                      style={{ backgroundColor: "rgba(123,193,59,0.12)", border: "1px solid rgba(123,193,59,0.3)", color: "var(--color-green-neon)" }}
+                      style={{ backgroundColor: "var(--color-action-edit-bg)", border: "1px solid var(--color-action-edit-border)", color: "var(--color-action-edit)" }}
                     >
                       <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -169,7 +176,7 @@ export default function DayTradesModal({
                       type="button"
                       onClick={() => setDeletingTrade(t)}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-opacity hover:opacity-80"
-                      style={{ backgroundColor: "rgba(224,82,82,0.1)", border: "1px solid rgba(224,82,82,0.3)", color: "var(--color-danger)" }}
+                      style={{ backgroundColor: "var(--color-action-delete-bg)", border: "1px solid var(--color-action-delete-border)", color: "var(--color-action-delete)" }}
                     >
                       <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3M4 7h16" />

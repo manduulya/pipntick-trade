@@ -574,6 +574,28 @@ describe("account asset class", () => {
     expect(Number(values.pnl)).toBeCloseTo(-100.7);
   });
 
+  it("stores screenshot links normalized and rejects non-TradingView links", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(getDefaultAccount).mockResolvedValue({ ...FAKE_ACCOUNT, status: "active", assetClass: "futures" } as any);
+    setInsertResult([{ id: "t1" }]);
+    const app = await buildApp();
+    const ok = await app.inject(post("MNQ", { preTradeUrl: "tradingview.com/x/k1tz0owS", postTradeUrl: null }));
+    expect(ok.statusCode).toBe(201);
+    expect(getLastInsertValues()).toMatchObject({ preTradeUrl: "https://www.tradingview.com/x/k1tz0owS/", postTradeUrl: null });
+    const bad = await app.inject(post("MNQ", { postTradeUrl: "https://imgur.com/abc" }));
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it("keeps screenshot links on PATCH unless sent, and clears them with null", async () => {
+    const stored = { ...legacyTrade, symbol: "MNQ", preTradeUrl: "https://www.tradingview.com/x/aaa/", postTradeUrl: "https://www.tradingview.com/x/bbb/" };
+    setSelectResult([{ trade: stored, accountStatus: "active", assetClass: "futures" }]);
+    const app = await buildApp();
+    await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { notes: "x" } });
+    expect(getLastUpdateSet()).toMatchObject({ preTradeUrl: stored.preTradeUrl, postTradeUrl: stored.postTradeUrl });
+    await app.inject({ method: "PATCH", url: "/api/trades/t1", payload: { postTradeUrl: null } });
+    expect(getLastUpdateSet()).toMatchObject({ preTradeUrl: stored.preTradeUrl, postTradeUrl: null });
+  });
+
   it("keeps a legacy trade editable but checks a changed symbol", async () => {
     setSelectResult([{ trade: legacyTrade, accountStatus: "active", assetClass: "futures" }]);
     const app = await buildApp();

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { and, desc, eq } from "drizzle-orm";
 import { db, tradingAccounts, trades } from "@pipntick/db";
-import { MAX_TAKE_PROFITS, commissionAsCost, getContractSize, type AssetClass } from "@pipntick/shared";
+import { MAX_TAKE_PROFITS, commissionAsCost, getContractSize, parseTradingViewSnapshot, type AssetClass } from "@pipntick/shared";
 import { getUserId } from "../lib/auth.js";
 import { resolveAccount, resolveAccountId } from "../lib/resolve-account.js";
 import { ARCHIVED_ACCOUNT_ERROR, isArchived, symbolClassError } from "../lib/account-guard.js";
@@ -33,7 +33,33 @@ type CreateTradeBody = {
   /** Optional planned levels. On PATCH: absent = keep; stopLoss null / takeProfits [] = clear. */
   stopLoss?: number | null;
   takeProfits?: number[];
+  /** Optional TradingView snapshot links. On PATCH: absent = keep, null = clear. */
+  preTradeUrl?: string | null;
+  postTradeUrl?: string | null;
 };
+
+/**
+ * Validates the optional pre/post-trade screenshot links: each must be a TradingView snapshot
+ * link and is stored normalized. `undefined` in the result means "not sent" (PATCH keeps it);
+ * null or an empty string clears it.
+ */
+export function normalizeScreenshotLinks(
+  body: { preTradeUrl?: unknown; postTradeUrl?: unknown },
+): { preTradeUrl?: string | null; postTradeUrl?: string | null } | { error: string } {
+  const out: { preTradeUrl?: string | null; postTradeUrl?: string | null } = {};
+  for (const key of ["preTradeUrl", "postTradeUrl"] as const) {
+    const v = body[key];
+    if (v === undefined) continue;
+    if (v === null || v === "") {
+      out[key] = null;
+      continue;
+    }
+    const parsed = typeof v === "string" ? parseTradingViewSnapshot(v) : null;
+    if (!parsed) return { error: `${key} must be a TradingView snapshot link (tradingview.com/x/…)` };
+    out[key] = parsed.url;
+  }
+  return out;
+}
 
 const isPrice = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 
@@ -125,6 +151,8 @@ export async function tradeRoutes(app: FastifyInstance) {
     }
     const levels = normalizeLevels(body, body.entryPrice);
     if ("error" in levels) return reply.code(400).send({ error: levels.error });
+    const links = normalizeScreenshotLinks(body);
+    if ("error" in links) return reply.code(400).send({ error: links.error });
     const futureCutoff = Date.now() + FUTURE_TOLERANCE_MS;
     if (new Date(body.entryTime).getTime() > futureCutoff) {
       return reply.code(400).send({ error: "entryTime cannot be in the future" });
@@ -172,6 +200,8 @@ export async function tradeRoutes(app: FastifyInstance) {
         isMistake: body.isMistake ?? false,
         stopLoss: levels.stopLoss != null ? String(levels.stopLoss) : null,
         takeProfits: levels.takeProfits ?? [],
+        preTradeUrl: links.preTradeUrl ?? null,
+        postTradeUrl: links.postTradeUrl ?? null,
         source: body.source ?? "manual",
         screenshotUrl: body.screenshotUrl,
       })
@@ -228,6 +258,10 @@ export async function tradeRoutes(app: FastifyInstance) {
     const stopLoss =
       levels.stopLoss === undefined ? current.stopLoss : levels.stopLoss === null ? null : String(levels.stopLoss);
     const takeProfits = levels.takeProfits ?? current.takeProfits ?? [];
+    const links = normalizeScreenshotLinks(body);
+    if ("error" in links) return reply.code(400).send({ error: links.error });
+    const preTradeUrl = links.preTradeUrl === undefined ? current.preTradeUrl ?? null : links.preTradeUrl;
+    const postTradeUrl = links.postTradeUrl === undefined ? current.postTradeUrl ?? null : links.postTradeUrl;
     const entryTime = body.entryTime ? new Date(body.entryTime) : current.entryTime;
     const exitTime =
       body.exitTime === undefined ? current.exitTime : body.exitTime ? new Date(body.exitTime) : null;
@@ -281,6 +315,8 @@ export async function tradeRoutes(app: FastifyInstance) {
         isMistake,
         stopLoss,
         takeProfits,
+        preTradeUrl,
+        postTradeUrl,
         screenshotUrl: body.screenshotUrl ?? current.screenshotUrl,
         updatedAt: new Date(),
       })

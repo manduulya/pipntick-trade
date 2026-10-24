@@ -1,15 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ParsedTradeScreenshot, Trade } from "@pipntick/shared";
-import { useParseTradeScreenshot, useTrades } from "../../lib/hooks";
+import type { Trade } from "@pipntick/shared";
+import { useTrades } from "../../lib/hooks";
 import { useSelectedAccount } from "../../lib/account-context";
 import { computeDashboardStats, computeMonthCalendar, isClosed, utcWallClock } from "../../lib/trade-utils";
 import { ApiError } from "../../lib/api";
 import { useTheme } from "../../lib/theme-context";
 import EmptyAccountsState from "./EmptyAccountsState";
 import Toast from "./Toast";
-import { TradeForm, type EntryMethod, entryTabs } from "./_components/TradeForm";
+import { TradeForm } from "./_components/TradeForm";
 import DayTradesModal from "./_components/DayTradesModal";
 import { useLockBodyScroll } from "../../lib/use-lock-body-scroll";
 
@@ -157,124 +157,13 @@ function MonthlyCalendar({
 
 // ── Trade Entry Panel ──────────────────────────────────────────────────────────
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
-function UploadZone({
-  accept,
-  label,
-  hint,
-  onParsed,
-}: {
-  accept: string;
-  label: string;
-  hint: string;
-  onParsed?: (parsed: ParsedTradeScreenshot) => void;
-}) {
-  const [dragging, setDragging] = useState(false);
-  const [file, setFile]         = useState<File | null>(null);
-  const [error, setError]       = useState<string | null>(null);
-  const parseScreenshot = useParseTradeScreenshot();
-
-  async function handleUpload() {
-    if (!file || !onParsed) return;
-    setError(null);
-    try {
-      const dataUrl = await readFileAsDataUrl(file);
-      const parsed = await parseScreenshot.mutateAsync(dataUrl);
-      onParsed(parsed);
-      setFile(null);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to analyze screenshot.");
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <label
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          const f = e.dataTransfer.files[0];
-          if (f) setFile(f);
-        }}
-        className="flex flex-col items-center justify-center gap-2 rounded-xl cursor-pointer transition-all"
-        style={{
-          border: `2px dashed ${dragging ? "var(--color-green-primary)" : "var(--color-border)"}`,
-          backgroundColor: dragging ? "rgba(123,193,59,0.05)" : "var(--color-bg-base)",
-          padding: "32px 16px",
-        }}
-      >
-        <input
-          type="file"
-          accept={accept}
-          className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); }}
-        />
-        <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} style={{ color: dragging ? "var(--color-green-primary)" : "var(--color-border)" }}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-        </svg>
-        <p className="text-xs font-medium" style={{ color: dragging ? "var(--color-green-primary)" : "var(--color-text-secondary)" }}>
-          {file ? file.name : label}
-        </p>
-        <p className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>{hint}</p>
-      </label>
-
-      {file && (
-        <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(123,193,59,0.08)", border: "1px solid rgba(123,193,59,0.2)" }}>
-          <span className="text-[11px] truncate" style={{ color: "var(--color-green-neon)" }}>{file.name}</span>
-          <button onClick={() => setFile(null)} className="ml-2 shrink-0 hover:opacity-60" style={{ color: "var(--color-text-muted)" }}>
-            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {error && (
-        <p className="text-[11px]" style={{ color: "var(--color-danger)" }}>{error}</p>
-      )}
-
-      <button
-        type="button"
-        onClick={handleUpload}
-        className="neon-btn w-full rounded-lg py-2 text-xs font-semibold"
-        disabled={!file || !onParsed || parseScreenshot.isPending}
-        style={{ opacity: file && onParsed ? 1 : 0.4 }}
-      >
-        {parseScreenshot.isPending ? "Analyzing..." : "Upload & Parse"}
-      </button>
-    </div>
-  );
-}
-
+// Dashboard's Add Trade panel: just the shared TradeForm. (The screenshot-OCR tab was removed
+// from the UI; the API's /api/screenshot route and useParseTradeScreenshot remain for later.)
 function TradeEntryPanel({ onClose, onSaved }: { onClose: () => void; onSaved: (message: string) => void }) {
-  const { theme } = useTheme();
-  // White-tint hover overlay only reads as a highlight against a dark surface — flip to a dark
-  // tint in light mode, where it'd otherwise be invisible.
-  const hoverOverlay = theme === "light" ? "0,0,0" : "255,255,255";
-  const [method, setMethod] = useState<EntryMethod>("manual");
-  const [prefill, setPrefill] = useState<ParsedTradeScreenshot | null>(null);
-  const [prefillKey, setPrefillKey] = useState(0);
-
-  function handleParsed(parsed: ParsedTradeScreenshot) {
-    setPrefill(parsed);
-    setPrefillKey((k) => k + 1);
-    setMethod("manual");
-  }
-
   return (
     <div className="flex flex-col h-full rounded-xl overflow-hidden" style={{ backgroundColor: "var(--color-bg-surface)", border: "1px solid var(--color-border)" }}>
       {/* Header */}
-      <div className="shrink-0 px-3 pt-3 flex items-center justify-between">
+      <div className="shrink-0 px-3 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid var(--color-border)" }}>
         <h2 className="text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>Add Trade</h2>
         <button onClick={onClose} className="hover:opacity-60 transition-opacity" style={{ color: "var(--color-text-muted)" }}>
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -283,50 +172,9 @@ function TradeEntryPanel({ onClose, onSaved }: { onClose: () => void; onSaved: (
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="shrink-0 flex gap-0 px-3 pt-2 pb-0">
-        {entryTabs.map((tab) => {
-          const active = method === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setMethod(tab.id)}
-              className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold rounded-t-lg"
-              style={{
-                color: active ? "var(--color-text-primary)" : "var(--color-text-muted)",
-                backgroundColor: active ? "var(--color-bg-base)" : "transparent",
-                borderTop: active ? "1px solid var(--color-border)" : "1px solid transparent",
-                borderLeft: active ? "1px solid var(--color-border)" : "1px solid transparent",
-                borderRight: active ? "1px solid var(--color-border)" : "1px solid transparent",
-                borderBottom: active ? "1px solid var(--color-bg-base)" : "1px solid transparent",
-                marginBottom: active ? "-1px" : "0",
-                cursor: "pointer",
-                transition: "color 0.3s ease, background-color 0.3s ease",
-              }}
-              onMouseEnter={(e) => { if (!active) { const el = e.currentTarget; el.style.color = "var(--color-text-secondary)"; el.style.backgroundColor = `rgba(${hoverOverlay},0.03)`; } }}
-              onMouseLeave={(e) => { if (!active) { const el = e.currentTarget; el.style.color = "var(--color-text-muted)"; el.style.backgroundColor = "transparent"; } }}
-            >
-              <span style={{ color: active ? "var(--color-green-primary)" : "var(--color-text-muted)" }}>{tab.icon}</span>
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Divider */}
-      <div style={{ height: 1, backgroundColor: "var(--color-border)", flexShrink: 0 }} />
-
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-3">
-        {method === "manual"     && <TradeForm key={prefillKey} prefill={prefill} onSaved={onSaved} onDone={onClose} />}
-        {method === "screenshot" && (
-          <UploadZone
-            accept="image/*"
-            label="Drop screenshot here or click to browse"
-            hint="PNG, JPG, WEBP — trade data is read from the image"
-            onParsed={handleParsed}
-          />
-        )}
+        <TradeForm onSaved={onSaved} onDone={onClose} />
       </div>
     </div>
   );
