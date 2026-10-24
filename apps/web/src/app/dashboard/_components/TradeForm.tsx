@@ -11,34 +11,12 @@ import { detectSession, toDatetimeLocal } from "../../../lib/trade-utils";
 import InstrumentInput from "../InstrumentInput";
 import { ensureInstruments, findInstrument } from "../../../lib/instruments";
 import DateTimePicker from "./DateTimePicker";
+import ScreenshotLinksModal from "./ScreenshotLinksModal";
+import FormPopup from "./FormPopup";
 
-// Shared by Dashboard's inline quick-add panel and Journal's Add/Edit modal — both wrap this in
-// their own tabs/chrome (manual vs screenshot, modal vs inline card), but the manual-entry fields
-// themselves were previously two hand-copied implementations that had already drifted (Journal
-// had gained a P&L override + missing-field validation that Dashboard's copy never got).
-
-export type EntryMethod = "manual" | "screenshot";
-
-export const entryTabs: { id: EntryMethod; label: string; icon: React.ReactNode }[] = [
-  {
-    id: "manual",
-    label: "Manual",
-    icon: (
-      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-      </svg>
-    ),
-  },
-  {
-    id: "screenshot",
-    label: "Screenshot",
-    icon: (
-      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-    ),
-  },
-];
+// The one trade entry form, shared by Dashboard's Add Trade panel, Journal's Add/Edit modal, the
+// calendar day edit and Trade Plan's Log to Journal. (The screenshot-OCR entry tab was removed
+// from the UI; the API's /api/screenshot route and this form's `prefill` prop remain.)
 
 export const inputStyle: React.CSSProperties = {
   backgroundColor: "var(--color-bg-base)",
@@ -106,6 +84,7 @@ export function TradeForm({
   const maxDateTime = toBrokerWallClock(now);
 
   const [direction, setDirection] = useState<"long" | "short">(trade?.direction ?? prefill?.direction ?? "long");
+  const [hoverDirection, setHoverDirection] = useState<"long" | "short" | null>(null);
   const [symbol, setSymbol] = useState(trade?.symbol ?? prefill?.symbol ?? "");
   const [entryPrice, setEntryPrice] = useState(
     trade ? trimTrailingZeros(trade.entryPrice) : prefill?.entryPrice != null ? String(prefill.entryPrice) : ""
@@ -131,6 +110,13 @@ export function TradeForm({
   const [takeProfits, setTakeProfits] = useState<string[]>(
     trade?.takeProfits?.length ? trade.takeProfits.map(trimTrailingZeros) : [""],
   );
+  // Optional TradingView snapshot links, edited in ScreenshotLinksModal ("" = none).
+  const [preTradeUrl, setPreTradeUrl] = useState(trade?.preTradeUrl ?? "");
+  const [postTradeUrl, setPostTradeUrl] = useState(trade?.postTradeUrl ?? "");
+  const [showScreenshots, setShowScreenshots] = useState(false);
+  // Stop loss, targets and fees live in a popup (FormPopup) to keep the form short; its button
+  // shows a summary of whatever is set.
+  const [showExtras, setShowExtras] = useState(false);
   const [pnlOverride, setPnlOverride] = useState(trade?.pnlManual ?? false);
   const [manualPnl, setManualPnl] = useState(trade?.pnl ?? "");
   const [missingFields, setMissingFields] = useState<string[]>([]);
@@ -148,6 +134,8 @@ export function TradeForm({
     isMistake: trade?.isMistake ?? false,
     stopLoss: trade?.stopLoss != null ? trimTrailingZeros(trade.stopLoss) : "",
     takeProfits: (trade?.takeProfits ?? []).map(trimTrailingZeros).join(","),
+    preTradeUrl: trade?.preTradeUrl ?? "",
+    postTradeUrl: trade?.postTradeUrl ?? "",
     pnlOverride: trade?.pnlManual ?? false,
     manualPnl: trade?.pnl ?? "",
   };
@@ -209,6 +197,19 @@ export function TradeForm({
       : null;
   const plannedRR = entryNum !== null ? plannedRewardRisk(entryNum, stopNum, nearestTarget) : null;
 
+  // One-line summary of the collapsed "Stop loss, targets & fees" section, so nothing set there is
+  // hidden by surprise.
+  const feesTotal =
+    swap !== "" || commission !== ""
+      ? (swap !== "" ? Number(swap) : 0) + (commission !== "" ? commissionAsCost(Number(commission)) : 0)
+      : null;
+  const extrasSummary = [
+    stopLoss !== "" ? `SL ${stopLoss}` : null,
+    filledTargets.length ? `TP ${filledTargets.join(" / ")}` : null,
+    feesTotal !== null ? `Fees ${feesTotal < 0 ? "−" : "+"}$${Math.abs(feesTotal).toFixed(2)}` : null,
+  ].filter(Boolean).join(" · ");
+  const screenshotCount = (preTradeUrl ? 1 : 0) + (postTradeUrl ? 1 : 0);
+
   const computedPnl =
     entryPrice !== "" && exitPrice !== "" && lotSize !== ""
       ? (direction === "long" ? Number(exitPrice) - Number(entryPrice) : Number(entryPrice) - Number(exitPrice)) *
@@ -223,6 +224,7 @@ export function TradeForm({
     setSymbol(""); setEntryPrice(""); setExitPrice("");
     setEntryDateTime(""); setExitDateTime(""); setLotSize("");
     setSwap(""); setCommission(""); setNotes(""); setIsMistake(false); setStopLoss(""); setTakeProfits([""]);
+    setPreTradeUrl(""); setPostTradeUrl(""); setShowExtras(false);
     setPnlOverride(false); setManualPnl(""); setMissingFields([]); setDateError(null); setUnlistedSymbol(false);
   }
 
@@ -300,6 +302,8 @@ export function TradeForm({
       if (isMistake !== initial.isMistake) input.isMistake = isMistake;
       if (stopLoss !== initial.stopLoss) input.stopLoss = stopLoss !== "" ? Number(stopLoss) : null;
       if (filledTargets.map(String).join(",") !== initial.takeProfits) input.takeProfits = filledTargets;
+      if (preTradeUrl !== initial.preTradeUrl) input.preTradeUrl = preTradeUrl || null;
+      if (postTradeUrl !== initial.postTradeUrl) input.postTradeUrl = postTradeUrl || null;
       if (pnlOverride !== initial.pnlOverride || manualPnl !== initial.manualPnl) input.pnl = overridePnl;
       updateTrade.mutate({ id: trade.id, input }, {
         onSuccess: () => handleSuccess("Trade updated successfully"),
@@ -313,6 +317,8 @@ export function TradeForm({
       if (isMistake) input.isMistake = true;
       if (stopLoss !== "") input.stopLoss = Number(stopLoss);
       if (filledTargets.length) input.takeProfits = filledTargets;
+      if (preTradeUrl) input.preTradeUrl = preTradeUrl;
+      if (postTradeUrl) input.postTradeUrl = postTradeUrl;
       if (overridePnl !== null) input.pnl = overridePnl;
       createTrade.mutate(input, {
         onSuccess: (created) => {
@@ -351,93 +357,39 @@ export function TradeForm({
         </p>
       )}
       <div className="flex rounded-lg p-0.5 gap-0.5" style={{ backgroundColor: "var(--color-bg-base)", border: "1px solid var(--color-border)" }}>
-        {(["long", "short"] as const).map((d) => (
-          <button key={d} type="button" onClick={() => setDirection(d)} className="flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-all"
-            style={{
-              backgroundColor: direction === d ? (d === "long" ? "rgba(123,193,59,0.2)" : "rgba(239,68,68,0.2)") : "transparent",
-              color: direction === d ? (d === "long" ? "var(--color-green-neon)" : "var(--color-danger)") : "var(--color-text-muted)",
-              border: direction === d ? `1px solid ${d === "long" ? "rgba(123,193,59,0.4)" : "rgba(239,68,68,0.4)"}` : "1px solid transparent",
-            }}>
-            {d === "long" ? "▲ Long" : "▼ Short"}
-          </button>
-        ))}
+        {(["long", "short"] as const).map((d) => {
+          const active = direction === d;
+          const hovered = hoverDirection === d;
+          // Theme-aware action colors: neon in dark mode, deeper AA-contrast text in light mode.
+          const fg = d === "long" ? "var(--color-action-edit)" : "var(--color-action-delete)";
+          const rgb = d === "long" ? "123,193,59" : "224,82,82";
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDirection(d)}
+              onMouseEnter={() => setHoverDirection(d)}
+              onMouseLeave={() => setHoverDirection(null)}
+              aria-pressed={active}
+              className="flex-1 py-1.5 text-[11px] font-semibold rounded-md transition-all"
+              style={{
+                cursor: "pointer",
+                // Selected: solid tint, a touch stronger on hover. Unselected: faint tint of its
+                // own color on hover, so it previews what clicking will pick.
+                backgroundColor: active ? `rgba(${rgb},${hovered ? 0.28 : 0.2})` : hovered ? `rgba(${rgb},0.08)` : "transparent",
+                color: active || hovered ? fg : "var(--color-text-muted)",
+                border: `1px solid ${active ? `rgba(${rgb},0.45)` : hovered ? `rgba(${rgb},0.25)` : "transparent"}`,
+              }}
+            >
+              {d === "long" ? "▲ Long" : "▼ Short"}
+            </button>
+          );
+        })}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Price</label><input type="number" step="any" placeholder="0.00" value={entryPrice} onChange={(e) => { setEntryPrice(e.target.value); clearMissing("Entry Price"); }} style={missingFields.includes("Entry Price") ? missingInputStyle : inputStyle} /></div>
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Price</label><input type="number" step="any" placeholder="0.00" value={exitPrice} onChange={(e) => { setExitPrice(e.target.value); clearMissing("Exit Price"); }} style={missingFields.includes("Exit Price") ? missingInputStyle : inputStyle} /></div>
       </div>
-      {/* Optional planned levels — both independent; leaving them blank saves as before. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Stop Loss</label>
-          <input
-            type="number"
-            step="any"
-            placeholder="optional"
-            value={stopLoss}
-            onChange={(e) => setStopLoss(e.target.value)}
-            style={stopLoss ? { ...inputStyle, border: "1px solid rgba(224,82,82,0.45)" } : inputStyle}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
-            Take Profit{takeProfits.length > 1 ? "s" : ""}
-          </label>
-          {takeProfits.map((tp, i) => (
-            <div key={i} className="flex items-center gap-1">
-              {takeProfits.length > 1 && (
-                <span className="text-[10px] w-6 shrink-0" style={{ color: "var(--color-text-muted)" }}>TP{i + 1}</span>
-              )}
-              <input
-                type="number"
-                step="any"
-                placeholder="optional"
-                value={tp}
-                onChange={(e) => setTakeProfits((list) => list.map((v, k) => (k === i ? e.target.value : v)))}
-                style={tp ? { ...inputStyle, border: "1px solid rgba(123,193,59,0.45)" } : inputStyle}
-              />
-              {takeProfits.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setTakeProfits((list) => list.filter((_, k) => k !== i))}
-                  aria-label={`Remove target ${i + 1}`}
-                  className="shrink-0 w-6 h-6 grid place-content-center rounded hover:opacity-70"
-                  style={{ color: "var(--color-text-muted)" }}
-                >
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M6 6l12 12M18 6L6 18" /></svg>
-                </button>
-              )}
-            </div>
-          ))}
-          {takeProfits.length < MAX_TAKE_PROFITS && (
-            <button
-              type="button"
-              onClick={() => setTakeProfits((list) => [...list, ""])}
-              className="self-start text-[10px] font-semibold"
-              style={{ color: "var(--color-green-primary)" }}
-            >
-              + Add target
-            </button>
-          )}
-        </div>
-      </div>
-      {(plannedRR !== null || stopWrongSide || targetWrongSide) && (
-        <div className="flex flex-col gap-0.5 -mt-1 text-[10px]">
-          {plannedRR !== null && (
-            <span style={{ color: "var(--color-text-secondary)" }}>
-              Planned R:R <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>1 : {plannedRR.toFixed(2)}</span> (to the nearest target)
-            </span>
-          )}
-          {stopWrongSide && (
-            <span style={{ color: "#f5a524" }}>
-              Stop is on the profit side of entry for a {isLong ? "long" : "short"} — fine for a breakeven/trailing stop.
-            </span>
-          )}
-          {targetWrongSide && (
-            <span style={{ color: "#f5a524" }}>A target is on the loss side of entry for a {isLong ? "long" : "short"} — double-check it.</span>
-          )}
-        </div>
-      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Entry Date & Time ({entryTzLabel})</label><DateTimePicker tzLabel={entryTzLabel} min={minDateTime} max={maxDateTime} value={entryDateTime} onChange={(v) => { setEntryDateTime(v); clearMissing("Entry Date & Time"); setDateError(null); }} style={missingFields.includes("Entry Date & Time") || dateError?.field === "Entry Date & Time" ? missingInputStyle : inputStyle} /></div>
         <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Exit Date & Time ({exitTzLabel})</label><DateTimePicker tzLabel={exitTzLabel} min={entryDateTime || minDateTime} max={maxDateTime} value={exitDateTime} onChange={(v) => { setExitDateTime(v); setDateError(null); }} style={dateError?.field === "Exit Date & Time" ? missingInputStyle : inputStyle} /></div>
@@ -447,10 +399,130 @@ export function TradeForm({
         <span className="text-[11px] font-semibold" style={{ color: session ? "var(--color-green-primary)" : "var(--color-text-disabled)" }}>{session || "— enter entry time"}</span>
       </div>
       <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>{sizeSpec.sizeLabel}</label><input type="number" step={sizeSpec.step} min={sizeSpec.min} placeholder={sizeSpec.placeholder} value={lotSize} onChange={(e) => { setLotSize(e.target.value); clearMissing("Lot Size"); }} style={missingFields.includes("Lot Size") ? missingInputStyle : inputStyle} /></div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Swap</label><input type="number" step="any" placeholder="0.00 (optional)" value={swap} onChange={(e) => setSwap(e.target.value)} style={inputStyle} /></div>
-        <div className="flex flex-col gap-1"><label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Commission / Charges <span style={{ color: "var(--color-text-disabled)" }}>· always deducted</span></label><input type="number" step="any" placeholder="0.00 (optional)" value={commission} onChange={(e) => setCommission(e.target.value)} style={inputStyle} /></div>
+      {/* Optional extras, each in its own popup, side by side so the form stays short. The
+          buttons summarize what's set, so nothing entered in a popup is hidden by surprise. */}
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => setShowExtras(true)} className="form-extra-btn" title="Stop loss, take-profit targets, swap and commission">
+          <span className="form-extra-btn__label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4" /></svg>
+            SL, targets &amp; fees
+          </span>
+          <span className="form-extra-btn__hint" data-set={extrasSummary ? "" : undefined}>{extrasSummary || "Optional"}</span>
+        </button>
+        <button type="button" onClick={() => setShowScreenshots(true)} className="form-extra-btn" title="Pre-trade and post-trade TradingView snapshot links">
+          <span className="form-extra-btn__label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            Screenshots
+          </span>
+          <span className="form-extra-btn__hint" data-set={screenshotCount ? "" : undefined}>
+            {screenshotCount === 2 ? "Pre & post-trade ✓" : preTradeUrl ? "Pre-trade ✓" : postTradeUrl ? "Post-trade ✓" : "Optional"}
+          </span>
+        </button>
       </div>
+      {showScreenshots && (
+        <ScreenshotLinksModal
+          preTradeUrl={preTradeUrl}
+          postTradeUrl={postTradeUrl}
+          onSave={(links) => { setPreTradeUrl(links.preTradeUrl); setPostTradeUrl(links.postTradeUrl); }}
+          onClose={() => setShowScreenshots(false)}
+        />
+      )}
+      {showExtras && (
+        <FormPopup
+          title="Stop loss, targets & fees"
+          description="All optional. Levels are for review and planned R:R; fees fold into the P&L."
+          onClose={() => setShowExtras(false)}
+        >
+          <div className="flex flex-col gap-3">
+          {/* Optional planned levels — both independent; leaving them blank saves as before. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Stop Loss</label>
+              <input
+                type="number"
+                step="any"
+                placeholder="optional"
+                value={stopLoss}
+                onChange={(e) => setStopLoss(e.target.value)}
+                style={stopLoss ? { ...inputStyle, border: "1px solid rgba(224,82,82,0.45)" } : inputStyle}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+                Take Profit{takeProfits.length > 1 ? "s" : ""}
+              </label>
+              {takeProfits.map((tp, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  {takeProfits.length > 1 && (
+                    <span className="text-[10px] w-6 shrink-0" style={{ color: "var(--color-text-muted)" }}>TP{i + 1}</span>
+                  )}
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="optional"
+                    value={tp}
+                    onChange={(e) => setTakeProfits((list) => list.map((v, k) => (k === i ? e.target.value : v)))}
+                    style={tp ? { ...inputStyle, border: "1px solid rgba(123,193,59,0.45)" } : inputStyle}
+                  />
+                  {takeProfits.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setTakeProfits((list) => list.filter((_, k) => k !== i))}
+                      aria-label={`Remove target ${i + 1}`}
+                      className="shrink-0 w-6 h-6 grid place-content-center rounded hover:opacity-70"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M6 6l12 12M18 6L6 18" /></svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+              {takeProfits.length < MAX_TAKE_PROFITS && (
+                <button
+                  type="button"
+                  onClick={() => setTakeProfits((list) => [...list, ""])}
+                  className="self-start text-[10px] font-semibold"
+                  style={{ color: "var(--color-green-primary)" }}
+                >
+                  + Add target
+                </button>
+              )}
+            </div>
+          </div>
+          {(plannedRR !== null || stopWrongSide || targetWrongSide) && (
+            <div className="flex flex-col gap-0.5 -mt-1 text-[10px]">
+              {plannedRR !== null && (
+                <span style={{ color: "var(--color-text-secondary)" }}>
+                  Planned R:R <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>1 : {plannedRR.toFixed(2)}</span> (to the nearest target)
+                </span>
+              )}
+              {stopWrongSide && (
+                <span style={{ color: "#f5a524" }}>
+                  Stop is on the profit side of entry for a {isLong ? "long" : "short"} — fine for a breakeven/trailing stop.
+                </span>
+              )}
+              {targetWrongSide && (
+                <span style={{ color: "#f5a524" }}>A target is on the loss side of entry for a {isLong ? "long" : "short"} — double-check it.</span>
+              )}
+            </div>
+          )}
+          {/* Short single-line labels + items-end keep the two boxes level; the "always deducted"
+              note sits under the row instead of wrapping the Commission label. */}
+          <div className="flex flex-col gap-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
+              <div className="flex flex-col gap-1"><label className="text-[10px] whitespace-nowrap" style={{ color: "var(--color-text-muted)" }}>Swap</label><input type="number" step="any" placeholder="0.00 (optional)" value={swap} onChange={(e) => setSwap(e.target.value)} style={inputStyle} /></div>
+              <div className="flex flex-col gap-1"><label className="text-[10px] whitespace-nowrap" style={{ color: "var(--color-text-muted)" }} title="Commission / fees">Commission / Fees</label><input type="number" step="any" placeholder="0.00 (optional)" value={commission} onChange={(e) => setCommission(e.target.value)} style={inputStyle} /></div>
+            </div>
+            <p className="text-[10px]" style={{ color: "var(--color-text-disabled)" }}>
+              Commission / fees are always deducted, with or without a minus. Swap keeps its sign (brokers can pay it).
+            </p>
+          </div>
+          </div>
+        </FormPopup>
+      )}
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
           <label className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>P&L</label>

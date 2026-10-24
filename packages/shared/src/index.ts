@@ -48,6 +48,9 @@ export interface Trade {
   stopLoss: string | null;
   /** Optional take-profit targets (0–5), nearest to entry first. Empty when none. */
   takeProfits: string[];
+  /** Optional TradingView snapshot links (normalized), before and after the trade. */
+  preTradeUrl: string | null;
+  postTradeUrl: string | null;
   /** Signed broker adjustments already folded into pnl (negative = a cost). */
   swap: string | null;
   commission: string | null;
@@ -315,6 +318,28 @@ export interface CreateTradeInput {
   stopLoss?: number | null;
   /** Optional take-profit targets (up to 5). PATCH: omit = keep, [] = clear. */
   takeProfits?: number[];
+  /** Optional TradingView snapshot links (tradingview.com/x/…). PATCH: omit = keep, null = clear. */
+  preTradeUrl?: string | null;
+  postTradeUrl?: string | null;
+}
+
+const TRADINGVIEW_SNAPSHOT_RE = /^(?:https?:\/\/)?(?:www\.)?tradingview\.com\/x\/([A-Za-z0-9]+)\/?(?:[?#].*)?$/;
+
+/**
+ * A TradingView snapshot link ("https://www.tradingview.com/x/k1tz0owS/"), normalized, or null
+ * when the text isn't one. Accepts http/https, with or without "www." and the trailing slash.
+ * `imageUrl` is the PNG behind the snapshot — an informal (undocumented) TradingView path, so the
+ * UI must fall back to the page link if it doesn't load.
+ */
+export function parseTradingViewSnapshot(value: string): { id: string; url: string; imageUrl: string } | null {
+  const m = TRADINGVIEW_SNAPSHOT_RE.exec(value.trim());
+  if (!m) return null;
+  const id = m[1];
+  return {
+    id,
+    url: `https://www.tradingview.com/x/${id}/`,
+    imageUrl: `https://s3.tradingview.com/snapshots/${id[0].toLowerCase()}/${id}.png`,
+  };
 }
 
 /**

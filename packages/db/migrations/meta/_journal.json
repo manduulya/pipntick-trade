@@ -57,6 +57,13 @@
       "when": 1792714229330,
       "tag": "0007_commission_always_cost",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792805127201,
+      "tag": "0008_trade_screenshot_links",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import {
   isAssetClass,
   isReadOnlyAccount,
   isRuleMet,
+  parseTradingViewSnapshot,
   plannedRewardRisk,
   symbolFitsClass,
 } from "../index";
@@ -23,6 +24,29 @@ describe("plannedRewardRisk", () => {
     expect(plannedRewardRisk(4210, 4200, undefined)).toBeNull();
     expect(plannedRewardRisk(4210, 4215, 4234)).toBeNull(); // stop above a long's entry (breakeven/trail)
     expect(plannedRewardRisk(4210, 4210, 4234)).toBeNull(); // zero risk
+  });
+});
+
+describe("parseTradingViewSnapshot", () => {
+  it("normalizes snapshot links and derives the image URL", () => {
+    const expected = {
+      id: "k1tz0owS",
+      url: "https://www.tradingview.com/x/k1tz0owS/",
+      imageUrl: "https://s3.tradingview.com/snapshots/k/k1tz0owS.png",
+    };
+    expect(parseTradingViewSnapshot("https://www.tradingview.com/x/k1tz0owS/")).toEqual(expected);
+    expect(parseTradingViewSnapshot("  tradingview.com/x/k1tz0owS ")).toEqual(expected);
+    expect(parseTradingViewSnapshot("http://tradingview.com/x/k1tz0owS/?utm=1")).toEqual(expected);
+    expect(parseTradingViewSnapshot("https://www.tradingview.com/x/Ab12/")?.imageUrl).toBe(
+      "https://s3.tradingview.com/snapshots/a/Ab12.png",
+    );
+  });
+
+  it("rejects anything that isn't a TradingView snapshot", () => {
+    expect(parseTradingViewSnapshot("https://imgur.com/abc123")).toBeNull();
+    expect(parseTradingViewSnapshot("https://www.tradingview.com/chart/abc/")).toBeNull();
+    expect(parseTradingViewSnapshot("https://evil.com/tradingview.com/x/abc/")).toBeNull();
+    expect(parseTradingViewSnapshot("")).toBeNull();
   });
 });
 

@@ -23,7 +23,35 @@ import {
   sizeUnitSuffix,
   toDatetimeLocal,
   toJournalRow,
+  weekdayPnl,
 } from "../../lib/trade-utils";
+
+describe("weekdayPnl / best & worst day", () => {
+  // 2026-10-05 is a Monday, 10-06 Tuesday, 10-07 Wednesday (broker wall-clock dates).
+  const t = (date: string, pnl: string) => makeTrade({ entryTime: `${date}T10:00:00.000Z`, exitTime: `${date}T11:00:00.000Z`, pnl });
+
+  it("sums P&L per entry weekday, best first", () => {
+    const rows = weekdayPnl([t("2026-10-05", "100"), t("2026-10-06", "-80"), t("2026-10-12", "50"), t("2026-10-07", "-20")]);
+    expect(rows.map((r) => [r.name, r.pnl, r.trades])).toEqual([
+      ["Monday", 150, 2],
+      ["Wednesday", -20, 1],
+      ["Tuesday", -80, 1],
+    ]);
+  });
+
+  it("feeds the Best Day / Worst Day cards", () => {
+    const ps = computePeriodStats([t("2026-10-05", "100"), t("2026-10-06", "-80")], "monthly");
+    expect([ps.bestDay, ps.bestDaySub, ps.bestDayPos]).toEqual(["Monday", "+$100.00 · 1 trade", true]);
+    expect([ps.worstDay, ps.worstDaySub, ps.worstDayPos]).toEqual(["Tuesday", "-$80.00 · 1 trade", false]);
+  });
+
+  it("needs two weekdays for a worst day, and shows dashes with no trades", () => {
+    const one = computePeriodStats([t("2026-10-05", "-40"), t("2026-10-12", "-10")], "monthly");
+    expect([one.bestDay, one.bestDayPos, one.worstDay, one.worstDaySub]).toEqual(["Monday", false, "—", "needs trades on 2+ weekdays"]);
+    const none = computePeriodStats([], "monthly");
+    expect([none.bestDay, none.worstDay]).toEqual(["—", "—"]);
+  });
+});
 
 describe("sizeUnitSuffix", () => {
   it("is null when the trade fits the account's class (the column header names the unit)", () => {
@@ -62,6 +90,8 @@ function makeTrade(overrides: Partial<Trade> = {}): Trade {
     session: "London",
     source: "manual",
     screenshotUrl: null,
+    preTradeUrl: null,
+    postTradeUrl: null,
     notes: "",
     createdAt: "2026-03-15T10:00:00.000Z",
     updatedAt: "2026-03-15T10:00:00.000Z",
@@ -157,6 +187,11 @@ describe("formatLevels", () => {
       session: "London", source: "manual", screenshotUrl: null, notes: null, createdAt: "", updatedAt: "",
     } as Trade);
     expect([base.stopLoss, base.takeProfits]).toEqual([4200, [4230, 4245.5]]);
+  });
+
+  it("carries the screenshot links onto the Journal row", () => {
+    const row = toJournalRow(makeTrade({ preTradeUrl: "https://www.tradingview.com/x/aaa/" }));
+    expect([row.preTradeUrl, row.postTradeUrl]).toEqual(["https://www.tradingview.com/x/aaa/", null]);
   });
 });
 

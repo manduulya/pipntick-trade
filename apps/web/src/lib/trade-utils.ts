@@ -194,6 +194,9 @@ export type JournalRow = {
   stopLoss: number | null;
   /** Planned targets, nearest to entry first; empty when none (the Journal's TP column). */
   takeProfits: number[];
+  /** Optional TradingView snapshot links (see TradeScreenshots). */
+  preTradeUrl: string | null;
+  postTradeUrl: string | null;
 };
 
 /** Planned stop/targets as one short line, e.g. "SL 4200 · TP 4230 / 4245" (either part optional). */
@@ -227,6 +230,8 @@ export function toJournalRow(t: Trade): JournalRow {
     levels: formatLevels(t.stopLoss, t.takeProfits),
     stopLoss: t.stopLoss != null ? Number(t.stopLoss) : null,
     takeProfits: (t.takeProfits ?? []).map(Number),
+    preTradeUrl: t.preTradeUrl ?? null,
+    postTradeUrl: t.postTradeUrl ?? null,
   };
 }
 
@@ -252,7 +257,41 @@ export type PeriodStats = {
   /** No losing mistakes in the period (drives the muted vs red color). */
   mistakeCostZero: boolean;
   mistakeSub: string;
+  /** Weekday with the highest summed P&L, e.g. "Tuesday"; "—" with no trades (see weekdayPnl). */
+  bestDay: string;
+  bestDaySub: string;
+  /** Net P&L of that weekday is ≥ 0 (green) or < 0 (red, when every weekday lost). */
+  bestDayPos: boolean;
+  /** Weekday with the lowest summed P&L; "—" unless trades fall on at least two weekdays. */
+  worstDay: string;
+  worstDaySub: string;
+  worstDayPos: boolean;
 };
+
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+export type WeekdayRow = { day: number; name: string; trades: number; pnl: number };
+
+/**
+ * Closed trades grouped by the weekday they were entered on (the broker wall-clock date, read
+ * with utcWallClock like the calendar), summed P&L per weekday, best first. Only weekdays that
+ * have trades are included.
+ */
+export function weekdayPnl(closed: Trade[]): WeekdayRow[] {
+  const rows = new Map<number, WeekdayRow>();
+  for (const t of closed) {
+    const day = utcWallClock(t.entryTime).getDay();
+    const row = rows.get(day) ?? { day, name: WEEKDAY_NAMES[day], trades: 0, pnl: 0 };
+    row.trades += 1;
+    row.pnl += pnlOf(t);
+    rows.set(day, row);
+  }
+  return [...rows.values()].sort((a, b) => b.pnl - a.pnl || a.day - b.day);
+}
+
+function weekdaySub(row: WeekdayRow): string {
+  return `${fmtCurrency(row.pnl)} · ${row.trades} ${row.trades === 1 ? "trade" : "trades"}`;
+}
 
 /**
  * Cost of mistakes: the summed P&L of **losing** trades flagged as mistakes (≤ 0). A mistake that
@@ -302,6 +341,10 @@ export function computePeriodStats(closed: Trade[], period: Period, offset: numb
   const avgWinAmt = wins.length ? grossProfit / wins.length : 0;
   const avgLossAmt = losses.length ? grossLoss / losses.length : 0;
   const mc = mistakeCost(closed);
+  const days = weekdayPnl(closed);
+  const best = days[0];
+  // A "worst" day needs a second weekday to compare against; otherwise it would repeat the best.
+  const worst = days.length > 1 ? days[days.length - 1] : undefined;
 
   return {
     pnl: fmtCurrency(totalPnl),
@@ -320,6 +363,12 @@ export function computePeriodStats(closed: Trade[], period: Period, offset: numb
     mistakeCost: mc.cost < 0 ? fmtCurrency(mc.cost) : "$0.00",
     mistakeCostZero: mc.cost === 0,
     mistakeSub: mc.mistakes === 0 ? "no mistakes" : `${mc.mistakes} ${mc.mistakes === 1 ? "mistake" : "mistakes"} · ${mc.lost} lost`,
+    bestDay: best ? best.name : "—",
+    bestDaySub: best ? weekdaySub(best) : "no trades",
+    bestDayPos: best ? best.pnl >= 0 : true,
+    worstDay: worst ? worst.name : "—",
+    worstDaySub: worst ? weekdaySub(worst) : best ? "needs trades on 2+ weekdays" : "no trades",
+    worstDayPos: worst ? worst.pnl >= 0 : true,
   };
 }
 

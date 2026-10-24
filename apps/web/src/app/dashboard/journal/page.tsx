@@ -21,8 +21,8 @@ import Toast from "../Toast";
 import { useTheme } from "../../../lib/theme-context";
 import { useTimeFormat } from "../../../lib/time-format-context";
 import { formatDate } from "../../../lib/time-format";
-import { TradeForm, type EntryMethod, entryTabs } from "../_components/TradeForm";
-import DeleteTradeModal from "../_components/DeleteTradeModal";
+import { TradeForm } from "../_components/TradeForm";
+import TradeScreenshots from "../_components/TradeScreenshots";import DeleteTradeModal from "../_components/DeleteTradeModal";
 import MistakePill from "../_components/MistakePill";
 import ViewOnChartButton from "../_components/ViewOnChartButton";
 import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
@@ -30,71 +30,8 @@ import { useLockBodyScroll } from "../../../lib/use-lock-body-scroll";
 type SortKey = "date" | "instrument" | "direction" | "pnl" | "duration";
 type SortDir = "asc" | "desc";
 
-function UploadZone({ accept, label, hint }: { accept: string; label: string; hint: string }) {
-  const [dragging, setDragging] = useState(false);
-  const [file, setFile]         = useState<File | null>(null);
-  return (
-    <div className="flex flex-col gap-3">
-      <label
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}
-        className="flex flex-col items-center justify-center gap-2 rounded-xl cursor-pointer transition-all"
-        style={{ border: `2px dashed ${dragging ? "var(--color-green-primary)" : "var(--color-border)"}`, backgroundColor: dragging ? "rgba(123,193,59,0.05)" : "var(--color-bg-base)", padding: "32px 16px" }}
-      >
-        <input type="file" accept={accept} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); }} />
-        <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} style={{ color: dragging ? "var(--color-green-primary)" : "var(--color-border)" }}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-        </svg>
-        <p className="text-xs font-medium" style={{ color: dragging ? "var(--color-green-primary)" : "var(--color-text-secondary)" }}>{file ? file.name : label}</p>
-        <p className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>{hint}</p>
-      </label>
-      {file && (
-        <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "rgba(123,193,59,0.08)", border: "1px solid rgba(123,193,59,0.2)" }}>
-          <span className="text-[11px] truncate" style={{ color: "var(--color-green-neon)" }}>{file.name}</span>
-          <button onClick={() => setFile(null)} className="ml-2 shrink-0 hover:opacity-60" style={{ color: "var(--color-text-muted)" }}>
-            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-      )}
-      <button type="button" className="neon-btn w-full rounded-lg py-2 text-xs font-semibold" disabled={!file} style={{ opacity: file ? 1 : 0.4 }}>Upload & Parse</button>
-    </div>
-  );
-}
-
-function AnimatedContent({ method, children }: { method: EntryMethod; children: React.ReactNode }) {
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState<number | undefined>(undefined);
-
-  // Track the content's height continuously, not just on tab switch: the form grows after it opens
-  // (futures hint, planned R:R line, "+ Add target" rows, validation messages), and a stale pinned
-  // height with overflow:hidden clips the bottom — including the submit button — out of reach.
-  useEffect(() => {
-    const el = innerRef.current;
-    if (!el) return;
-    setHeight(el.scrollHeight);
-    const observer = new ResizeObserver(() => setHeight(el.scrollHeight));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [method]);
-
-  return (
-    <div
-      style={{
-        overflow: "hidden",
-        height: height !== undefined ? height : "auto",
-        transition: "height 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
-      }}
-    >
-      <div ref={innerRef}>{children}</div>
-    </div>
-  );
-}
-
 function AddTradeModal({ trade, onClose, onSaved }: { trade?: Trade; onClose: () => void; onSaved: (message: string) => void }) {
   const isEdit = !!trade;
-  const [method, setMethod] = useState<EntryMethod>("manual");
-  const tabs = entryTabs;
 
   const [visible, setVisible] = useState(false);
   useState(() => { requestAnimationFrame(() => setVisible(true)); });
@@ -135,46 +72,10 @@ function AddTradeModal({ trade, onClose, onSaved }: { trade?: Trade; onClose: ()
           </button>
         </div>
 
-        {/* Tabs */}
-        {!isEdit && (
-        <div className="flex gap-0 px-5 pt-3 shrink-0">
-          {tabs.map((tab) => {
-            const active = method === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setMethod(tab.id)}
-                className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold transition-all rounded-t-lg"
-                style={{
-                  color: active ? "var(--color-text-primary)" : "var(--color-text-muted)",
-                  backgroundColor: active ? "var(--color-bg-base)" : "transparent",
-                  borderTop: active ? "1px solid var(--color-border)" : "1px solid transparent",
-                  borderLeft: active ? "1px solid var(--color-border)" : "1px solid transparent",
-                  borderRight: active ? "1px solid var(--color-border)" : "1px solid transparent",
-                  borderBottom: active ? "1px solid var(--color-bg-base)" : "1px solid transparent",
-                  marginBottom: active ? "-1px" : "0",
-                }}
-              >
-                <span style={{ color: active ? "var(--color-green-primary)" : "var(--color-text-muted)" }}>{tab.icon}</span>
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-        )}
-        {!isEdit && <div style={{ height: 1, backgroundColor: "var(--color-border)", flexShrink: 0 }} />}
-
-        {/* Scroll region — bounds AnimatedContent against the panel's maxHeight:90vh via normal
-            flex remaining-space distribution, so tall content scrolls instead of silently
-            clipping. AnimatedContent's own height follows its content (ResizeObserver), and its
-            scrollHeight measurement is unaffected by an ancestor's overflow property. */}
+        {/* Scroll region — bounded by the panel's maxHeight:90vh via flex remaining-space
+            distribution, so a tall form scrolls instead of clipping the submit button. */}
         <div className="flex-1 min-h-0 overflow-y-auto p-5">
-        <AnimatedContent method={isEdit ? "manual" : method}>
-        <div className="flex flex-col gap-3">
-          {(isEdit || method === "manual") && <TradeForm trade={trade} onDone={handleClose} onSaved={onSaved} />}
-          {!isEdit && method === "screenshot" && <UploadZone accept="image/*" label="Drop screenshot here or click to browse" hint="PNG, JPG, WEBP — AI will extract trade data" />}
-        </div>
-        </AnimatedContent>
+          <TradeForm trade={trade} onDone={handleClose} onSaved={onSaved} />
         </div>
       </div>
     </div>
@@ -547,12 +448,15 @@ export default function JournalPage() {
                       <tr style={{ backgroundColor: "rgba(123,193,59,0.03)", borderBottom: "1px solid rgba(26,45,74,0.5)" }}>
                         <td colSpan={COLS.length} className="px-6 py-3">
                           <div className="flex items-center justify-between gap-4">
-                            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-                              <span className="font-semibold" style={{ color: t.isMistake ? "var(--color-danger)" : "var(--color-text-primary)" }}>
-                                {t.isMistake ? "Mistake: " : "Notes: "}
-                              </span>
-                              {t.notes || (t.isMistake ? "No description recorded." : "No notes for this trade.")}
-                            </p>
+                            <div className="flex flex-col gap-2 min-w-0">
+                              <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                                <span className="font-semibold" style={{ color: t.isMistake ? "var(--color-danger)" : "var(--color-text-primary)" }}>
+                                  {t.isMistake ? "Mistake: " : "Notes: "}
+                                </span>
+                                {t.notes || (t.isMistake ? "No description recorded." : "No notes for this trade.")}
+                              </p>
+                              <TradeScreenshots preTradeUrl={t.preTradeUrl} postTradeUrl={t.postTradeUrl} />
+                            </div>
                             <div className="shrink-0 flex items-center gap-2">
                               <ViewOnChartButton tradeId={t.id} />
                               {!readOnly && <>
@@ -564,7 +468,7 @@ export default function JournalPage() {
                                   if (full) setEditingTrade(full);
                                 }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-opacity hover:opacity-80"
-                                style={{ backgroundColor: "rgba(123,193,59,0.12)", border: "1px solid rgba(123,193,59,0.3)", color: "var(--color-green-neon)" }}
+                                style={{ backgroundColor: "var(--color-action-edit-bg)", border: "1px solid var(--color-action-edit-border)", color: "var(--color-action-edit)" }}
                               >
                                 <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -579,7 +483,7 @@ export default function JournalPage() {
                                   if (full) setDeletingTrade(full);
                                 }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-opacity hover:opacity-80"
-                                style={{ backgroundColor: "rgba(224,82,82,0.1)", border: "1px solid rgba(224,82,82,0.3)", color: "var(--color-danger)" }}
+                                style={{ backgroundColor: "var(--color-action-delete-bg)", border: "1px solid var(--color-action-delete-border)", color: "var(--color-action-delete)" }}
                               >
                                 <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0v13a2 2 0 01-2 2H8a2 2 0 01-2-2V7h12z" />

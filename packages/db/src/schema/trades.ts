@@ -37,6 +37,11 @@ export const trades = pgTable("trades", {
   // levels for review only — P&L still comes from the single exit price.
   stopLoss: numeric("stop_loss", { precision: 18, scale: 8 }),
   takeProfits: jsonb("take_profits").$type<string[]>().notNull().default([]),
+  // Optional chart screenshots before and after the trade, as TradingView snapshot links
+  // (https://www.tradingview.com/x/<id>/), stored normalized — see parseTradingViewSnapshot in
+  // @pipntick/shared. Only the link is stored, not the image.
+  preTradeUrl: text("pre_trade_url"),
+  postTradeUrl: text("post_trade_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
